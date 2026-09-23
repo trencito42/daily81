@@ -2,7 +2,6 @@
 
 import React from "react";
 import { CellState } from "@/lib/sudoku/types";
-import { getRow, getCol, getBlock } from "@/lib/sudoku/validate";
 
 interface SudokuBoardProps {
   cells: CellState[];
@@ -27,6 +26,52 @@ export function SudokuBoard({
 
   return (
     <div className="sudoku-container" role="grid" aria-label="Sudoku Board 9x9">
+      {/* 3x3 Hand-drawn Divider Stroke Overlay */}
+      <svg
+        className="sudoku-dividers-overlay"
+        viewBox="0 0 900 900"
+        preserveAspectRatio="none"
+        aria-hidden="true"
+      >
+        {/* Vertical divider after Col 3 (x=300) */}
+        <path
+          d="M 300,2 Q 299.5,450 300.2,898"
+          fill="none"
+          stroke="var(--ink-primary)"
+          strokeWidth="2.2"
+          strokeLinecap="round"
+          vectorEffect="non-scaling-stroke"
+        />
+        {/* Vertical divider after Col 6 (x=600) */}
+        <path
+          d="M 600,2 Q 600.6,450 599.8,898"
+          fill="none"
+          stroke="var(--ink-primary)"
+          strokeWidth="2.2"
+          strokeLinecap="round"
+          vectorEffect="non-scaling-stroke"
+        />
+        {/* Horizontal divider after Row 3 (y=300) */}
+        <path
+          d="M 2,300 Q 450,299.4 898,300.3"
+          fill="none"
+          stroke="var(--ink-primary)"
+          strokeWidth="2.2"
+          strokeLinecap="round"
+          vectorEffect="non-scaling-stroke"
+        />
+        {/* Horizontal divider after Row 6 (y=600) */}
+        <path
+          d="M 2,600 Q 450,600.5 898,599.7"
+          fill="none"
+          stroke="var(--ink-primary)"
+          strokeWidth="2.2"
+          strokeLinecap="round"
+          vectorEffect="non-scaling-stroke"
+        />
+      </svg>
+
+      {/* Underlying 9x9 Mathematical Grid */}
       <div className="sudoku-grid">
         {cells.map((cell) => {
           const isSelected = selectedIndex === cell.index;
@@ -41,8 +86,6 @@ export function SudokuBoard({
             selectedValue !== null &&
             cell.value === selectedValue;
 
-          const isBlockRight = cell.col === 2 || cell.col === 5;
-          const isBlockBottom = cell.row === 2 || cell.row === 5;
           const isEdgeRight = cell.col === 8;
           const isEdgeBottom = cell.row === 8;
 
@@ -53,8 +96,6 @@ export function SudokuBoard({
             isMatching ? "match-highlight" : "",
             cell.given ? "is-given" : "is-user",
             cell.isMistake ? "is-mistake" : "",
-            isBlockRight ? "block-right" : "",
-            isBlockBottom ? "block-bottom" : "",
             isEdgeRight ? "edge-right" : "",
             isEdgeBottom ? "edge-bottom" : "",
           ]

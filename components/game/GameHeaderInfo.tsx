@@ -38,8 +38,8 @@ export function GameHeaderInfo({
     <div
       style={{
         width: "100%",
-        maxWidth: "500px",
-        margin: "0 auto 12px",
+        maxWidth: "480px",
+        margin: "0 auto 10px",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
@@ -48,9 +48,10 @@ export function GameHeaderInfo({
     >
       {/* Title & Date */}
       <h1
+        className="font-doodle"
         style={{
-          fontSize: "18px",
-          fontWeight: 600,
+          fontSize: "22px",
+          fontWeight: 400,
           color: "var(--ink-primary)",
           letterSpacing: "-0.2px",
           marginBottom: "2px",
@@ -63,20 +64,18 @@ export function GameHeaderInfo({
         style={{
           display: "flex",
           alignItems: "center",
-          gap: "10px",
+          gap: "8px",
           fontSize: "13px",
           color: "var(--ink-secondary)",
-          marginBottom: "8px",
+          marginBottom: "6px",
         }}
       >
         {dateStr && <span>{formatNotebookDate(dateStr)}</span>}
         {dateStr && <span>•</span>}
         <span
+          className="font-doodle"
           style={{
-            textTransform: "uppercase",
-            fontWeight: 600,
-            letterSpacing: "0.5px",
-            fontSize: "12px",
+            fontSize: "13px",
             color: "var(--ink-primary)",
           }}
         >
@@ -86,7 +85,7 @@ export function GameHeaderInfo({
           <>
             <span>•</span>
             <span className="font-doodle" style={{ color: "var(--ink-primary)" }}>
-              {streak} day streak
+              {streak}d streak
             </span>
           </>
         )}
@@ -99,7 +98,7 @@ export function GameHeaderInfo({
           justifyContent: "space-between",
           alignItems: "center",
           width: "100%",
-          padding: "0 4px",
+          padding: "0 2px",
           fontSize: "13px",
           color: "var(--ink-secondary)",
         }}
@@ -109,7 +108,12 @@ export function GameHeaderInfo({
             type="button"
             onClick={onTogglePause}
             className="doodle-button doodle-button-sm doodle-button-ghost"
-            style={{ padding: "2px 6px", fontFamily: "var(--font-mono)" }}
+            style={{
+              padding: "2px 8px",
+              fontFamily: "var(--font-mono)",
+              fontSize: "13px",
+              borderRadius: "255px 6px 225px 6px/6px 225px 6px 255px",
+            }}
             aria-label={isPaused ? "Resume game" : "Pause game"}
           >
             {isPaused ? <PlayIcon /> : <PauseIcon />}
@@ -120,7 +124,13 @@ export function GameHeaderInfo({
         )}
 
         {showMistakes && (
-          <div style={{ fontFamily: "var(--font-doodle)", color: mistakes > 0 ? "var(--error-ink)" : "var(--ink-secondary)" }}>
+          <div
+            className="font-doodle"
+            style={{
+              color: mistakes > 0 ? "var(--error-ink)" : "var(--ink-secondary)",
+              fontSize: "13px",
+            }}
+          >
             mistakes: {mistakes}
           </div>
         )}

@@ -555,34 +555,7 @@ export function SudokuGame({
         streak={userStreak}
       />
 
-      {isPaused ? (
-        <div
-          style={{
-            width: "100%",
-            maxWidth: "440px",
-            aspectRatio: "1 / 1",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            border: "2px solid var(--ink-primary)",
-            borderRadius: "255px 12px 225px 12px/12px 225px 12px 255px",
-            gap: "16px",
-          }}
-        >
-          <div className="font-doodle" style={{ fontSize: "22px" }}>
-            game paused
-          </div>
-          <button
-            type="button"
-            onClick={() => setIsPaused(false)}
-            className="doodle-button active"
-            style={{ fontSize: "15px" }}
-          >
-            resume puzzle
-          </button>
-        </div>
-      ) : isCompleted && xpBreakdown ? (
+      {isCompleted && xpBreakdown ? (
         <CompletionSheet
           difficulty={initialPuzzle.difficulty}
           elapsedSeconds={elapsedSeconds}
@@ -593,16 +566,32 @@ export function SudokuGame({
         />
       ) : (
         <>
-          <SudokuBoard
-            cells={cells}
-            selectedIndex={selectedIndex}
-            onSelectCell={(idx) => {
-              setSelectedIndex(idx);
-              if (!isStarted) setIsStarted(true);
-            }}
-            highlightMatching={settings.highlightMatching}
-            highlightRelated={settings.highlightRelated}
-          />
+          {isPaused ? (
+            <div className="sudoku-container" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "16px" }}>
+              <div className="font-doodle" style={{ fontSize: "24px", color: "var(--ink-primary)" }}>
+                game paused
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsPaused(false)}
+                className="doodle-button active"
+                style={{ fontSize: "14px", padding: "8px 20px" }}
+              >
+                resume puzzle
+              </button>
+            </div>
+          ) : (
+            <SudokuBoard
+              cells={cells}
+              selectedIndex={selectedIndex}
+              onSelectCell={(idx) => {
+                setSelectedIndex(idx);
+                if (!isStarted) setIsStarted(true);
+              }}
+              highlightMatching={settings.highlightMatching}
+              highlightRelated={settings.highlightRelated}
+            />
+          )}
 
           <NumberPad
             onNumberClick={handleSetNumber}

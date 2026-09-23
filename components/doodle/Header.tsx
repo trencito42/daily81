@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { loadGuestProfile } from "@/lib/client/storage";
+import { DoodleUnderline } from "./DoodleUnderline";
 
 interface HeaderProps {
   user?: {
@@ -132,9 +133,9 @@ export function Header({ user: serverUser }: HeaderProps) {
                 position: "relative",
                 padding: "2px 0",
               }}
-              className={isActive ? "doodle-underline" : ""}
             >
               {link.label}
+              {isActive && <DoodleUnderline />}
               {link.badge && (
                 <span
                   style={{
@@ -162,10 +163,12 @@ export function Header({ user: serverUser }: HeaderProps) {
             color: "var(--ink-primary)",
             fontSize: "13px",
             fontWeight: 600,
-            padding: "4px 8px",
-            border: "1px solid var(--border-subtle)",
-            borderRadius: "255px 6px 225px 6px/6px 225px 6px 255px",
+            fontFamily: "var(--font-mono)",
+            padding: "3px 10px",
+            border: "1.5px solid var(--ink-primary)",
+            borderRadius: "255px 8px 225px 8px/8px 225px 8px 255px",
             backgroundColor: "var(--bg-paper)",
+            transition: "background-color 0.1s ease",
           }}
           className="desktop-nav"
         >

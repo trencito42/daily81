@@ -1,25 +1,36 @@
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Short+Stack&family=JetBrains+Mono:wght@500;700&display=swap");
 
 :root {
+  /* Warm mathematical notebook palette */
   --bg-paper: #FDF9F3;
   --bg-paper-alt: #F7F1E7;
   --ink-primary: #191919;
-  --ink-secondary: #66615B;
+  --ink-player: #36322E;
+  --ink-secondary: #665F57;
   --ink-muted: #9E988F;
   --border-subtle: #D9D2C8;
-  --border-strong: #403C38;
+  --border-strong: #191919;
   --highlight-cell: #F3E7A5;
-  --highlight-peer: #F5EFE3;
-  --highlight-match: #EBE1D2;
+  --highlight-peer: #F6F0E6;
+  --highlight-match: #ECE3D4;
   --error-ink: #C8564B;
   --error-bg: #FDF0EE;
   --success-ink: #3D7A5A;
   
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-doodle: 'Short Stack', cursive;
+  --font-doodle: 'Short Stack', cursive, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 
-  --board-max-size: 500px;
+  /* Controlled DoodleCSS organic border tokens */
+  --doodle-border-outer: 255px 15px 225px 15px/15px 225px 15px 255px;
+  --doodle-border-sm: 255px 10px 225px 10px/10px 225px 10px 255px;
+  --doodle-border-tag: 255px 6px 225px 6px/6px 225px 6px 255px;
+  
+  --doodle-btn-var1: 255px 12px 225px 12px/12px 225px 12px 255px;
+  --doodle-btn-var2: 12px 255px 14px 225px/225px 14px 255px 12px;
+  --doodle-btn-var3: 225px 15px 255px 10px/10px 255px 15px 225px;
+
+  --board-max-size: 480px;
 }
 
 * {
@@ -57,15 +68,15 @@ body {
   font-family: var(--font-mono);
 }
 
-/* Subtle hand-drawn border effect */
+/* Subtle hand-drawn border utilities */
 .doodle-border {
   border: 1.5px solid var(--ink-primary);
-  border-radius: 255px 15px 225px 15px/15px 225px 15px 255px;
+  border-radius: var(--doodle-border-outer);
 }
 
 .doodle-border-subtle {
   border: 1px solid var(--border-subtle);
-  border-radius: 255px 10px 225px 10px/10px 225px 10px 255px;
+  border-radius: var(--doodle-border-sm);
 }
 
 /* Notebook style interactive buttons */
@@ -77,7 +88,7 @@ body {
   background: transparent;
   color: var(--ink-primary);
   border: 1.5px solid var(--ink-primary);
-  border-radius: 255px 15px 225px 15px/15px 225px 15px 255px;
+  border-radius: var(--doodle-btn-var1);
   padding: 8px 16px;
   font-family: var(--font-sans);
   font-size: 14px;
@@ -104,6 +115,7 @@ body {
 .doodle-button-sm {
   padding: 4px 10px;
   font-size: 13px;
+  border-radius: var(--doodle-border-tag);
 }
 
 .doodle-button-ghost {
@@ -116,7 +128,7 @@ body {
   color: var(--ink-primary);
 }
 
-/* Tactile number pad button */
+/* Tactile number pad button with fixed variants */
 .numpad-btn {
   display: flex;
   flex-direction: column;
@@ -125,11 +137,10 @@ body {
   height: 48px;
   width: 100%;
   max-width: 46px;
-  background-color: transparent;
+  background-color: var(--bg-paper);
   border: 1.5px solid var(--ink-primary);
-  border-radius: 255px 12px 225px 12px/12px 225px 12px 255px;
-  font-family: var(--font-sans);
-  font-size: 20px;
+  font-family: var(--font-doodle);
+  font-size: clamp(20px, 4.5vw, 24px);
   font-weight: 600;
   color: var(--ink-primary);
   cursor: pointer;
@@ -137,6 +148,18 @@ body {
   user-select: none;
   transition: transform 0.08s ease, background-color 0.1s ease, opacity 0.15s ease;
   position: relative;
+}
+
+.numpad-btn-var1 {
+  border-radius: var(--doodle-btn-var1);
+}
+
+.numpad-btn-var2 {
+  border-radius: var(--doodle-btn-var2);
+}
+
+.numpad-btn-var3 {
+  border-radius: var(--doodle-btn-var3);
 }
 
 .numpad-btn:hover {
@@ -157,7 +180,7 @@ body {
   position: absolute;
   bottom: 2px;
   right: 4px;
-  font-size: 9px;
+  font-size: 10px;
   font-family: var(--font-doodle);
   color: var(--ink-muted);
   line-height: 1;
@@ -174,14 +197,14 @@ body {
   position: absolute;
   left: -2px;
   right: -2px;
-  bottom: -2px;
+  bottom: -3px;
   height: 2px;
   background: currentColor;
   border-radius: 255px 10px 225px 10px/10px 225px 10px 255px;
   opacity: 0.85;
 }
 
-/* Sudoku Board Container */
+/* Sudoku Board Outer Frame */
 .sudoku-container {
   width: 100%;
   max-width: var(--board-max-size);
@@ -189,6 +212,11 @@ body {
   margin: 0 auto;
   user-select: none;
   position: relative;
+  border: 2px solid var(--ink-primary);
+  border-radius: var(--doodle-border-outer);
+  overflow: hidden;
+  background-color: var(--bg-paper);
+  box-shadow: 2px 3px 0px rgba(25, 25, 25, 0.04);
 }
 
 .sudoku-grid {
@@ -197,34 +225,35 @@ body {
   grid-template-rows: repeat(9, 1fr);
   width: 100%;
   height: 100%;
-  border: 2px solid var(--ink-primary);
-  background-color: var(--bg-paper);
+  position: relative;
+  z-index: 1;
 }
 
-/* Sudoku Cell */
+/* 3x3 Hand-drawn SVG overlay dividers */
+.sudoku-dividers-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* Sudoku 1x1 Cell */
 .sudoku-cell {
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-right: 1px solid var(--border-subtle);
-  border-bottom: 1px solid var(--border-subtle);
-  font-size: clamp(18px, 4.5vw, 26px);
-  font-weight: 500;
+  border-right: 0.75px solid var(--border-subtle);
+  border-bottom: 0.75px solid var(--border-subtle);
+  font-family: var(--font-doodle);
   cursor: pointer;
   touch-action: manipulation;
   user-select: none;
   transition: background-color 0.08s ease;
   overflow: hidden;
-}
-
-/* Block borders (thicker 3x3 dividers) */
-.sudoku-cell.block-right {
-  border-right: 2px solid var(--ink-primary);
-}
-
-.sudoku-cell.block-bottom {
-  border-bottom: 2px solid var(--ink-primary);
 }
 
 .sudoku-cell.edge-right {
@@ -235,7 +264,20 @@ body {
   border-bottom: none;
 }
 
-/* Cell highlight states */
+/* Cell Digits */
+.sudoku-cell.is-given {
+  color: var(--ink-primary);
+  font-weight: 700;
+  font-size: clamp(21px, 5.2vw, 28px);
+}
+
+.sudoku-cell.is-user {
+  color: var(--ink-player);
+  font-weight: 400;
+  font-size: clamp(20px, 5vw, 27px);
+}
+
+/* Highlight states */
 .sudoku-cell.peer-highlight {
   background-color: var(--highlight-peer);
 }
@@ -244,42 +286,56 @@ body {
   background-color: var(--highlight-match);
 }
 
+.sudoku-cell.match-highlight span {
+  text-decoration: underline;
+  text-decoration-color: var(--ink-secondary);
+  text-underline-offset: 3px;
+}
+
 .sudoku-cell.selected {
   background-color: var(--highlight-cell) !important;
+  border-radius: 255px 3px 225px 3px/3px 225px 3px 255px;
 }
 
-.sudoku-cell.is-given {
-  font-weight: 700;
-  color: var(--ink-primary);
-}
-
-.sudoku-cell.is-user {
-  font-weight: 600;
-  color: #2D3748;
-}
-
+/* Teacher's red pencil marking for error */
 .sudoku-cell.is-mistake {
   color: var(--error-ink) !important;
   background-color: var(--error-bg);
 }
 
-/* Pencil candidates mini-grid */
+.sudoku-cell.is-mistake span {
+  position: relative;
+  display: inline-block;
+}
+
+.sudoku-cell.is-mistake span::after {
+  content: "";
+  position: absolute;
+  left: -3px;
+  right: -3px;
+  bottom: 0px;
+  height: 2px;
+  background-color: var(--error-ink);
+  border-radius: 255px 4px 225px 4px/4px 225px 4px 255px;
+}
+
+/* Pencil candidates mini-grid (3x3) */
 .cell-notes-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   grid-template-rows: repeat(3, 1fr);
   width: 100%;
   height: 100%;
-  padding: 2px;
+  padding: 1px;
 }
 
 .cell-note {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: clamp(8px, 1.8vw, 11px);
-  font-family: var(--font-sans);
-  font-weight: 500;
+  font-size: clamp(9px, 2vw, 12px);
+  font-family: var(--font-doodle);
+  font-weight: 400;
   color: var(--ink-secondary);
   line-height: 1;
 }
@@ -295,9 +351,9 @@ body {
 /* Tactile inputs */
 .doodle-input {
   width: 100%;
-  background: transparent;
+  background: var(--bg-paper);
   border: 1.5px solid var(--ink-primary);
-  border-radius: 255px 12px 225px 12px/12px 225px 12px 255px;
+  border-radius: var(--doodle-btn-var1);
   padding: 10px 14px;
   font-size: 15px;
   color: var(--ink-primary);
@@ -312,15 +368,6 @@ body {
 }
 
 /* Animations */
-@keyframes pencilDraw {
-  from {
-    stroke-dashoffset: 100;
-  }
-  to {
-    stroke-dashoffset: 0;
-  }
-}
-
 @keyframes gentlePop {
   0% {
     transform: scale(0.92);
