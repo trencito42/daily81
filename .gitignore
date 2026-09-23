@@ -1,0 +1,41 @@
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+.yarn/cache
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# local env files
+.env
+.env*.local
+!.env.example
+
+# vercel & typescript
+.vercel
+*.tsbuildinfo
+next-env.d.ts
+
+# session files & scratch
+*.log
+session.txt
+cookies.txt
+/tmp/

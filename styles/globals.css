@@ -1,0 +1,347 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Short+Stack&family=JetBrains+Mono:wght@500;700&display=swap");
+
+:root {
+  --bg-paper: #FDF9F3;
+  --bg-paper-alt: #F7F1E7;
+  --ink-primary: #191919;
+  --ink-secondary: #66615B;
+  --ink-muted: #9E988F;
+  --border-subtle: #D9D2C8;
+  --border-strong: #403C38;
+  --highlight-cell: #F3E7A5;
+  --highlight-peer: #F5EFE3;
+  --highlight-match: #EBE1D2;
+  --error-ink: #C8564B;
+  --error-bg: #FDF0EE;
+  --success-ink: #3D7A5A;
+  
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-doodle: 'Short Stack', cursive;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  --board-max-size: 500px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  min-height: 100%;
+  height: 100%;
+  background-color: var(--bg-paper);
+  color: var(--ink-primary);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  background-image: radial-gradient(#E8E1D5 0.75px, transparent 0.75px);
+  background-size: 24px 24px;
+}
+
+/* Notebook doodle text styling */
+.font-doodle {
+  font-family: var(--font-doodle);
+}
+
+.font-mono {
+  font-family: var(--font-mono);
+}
+
+/* Subtle hand-drawn border effect */
+.doodle-border {
+  border: 1.5px solid var(--ink-primary);
+  border-radius: 255px 15px 225px 15px/15px 225px 15px 255px;
+}
+
+.doodle-border-subtle {
+  border: 1px solid var(--border-subtle);
+  border-radius: 255px 10px 225px 10px/10px 225px 10px 255px;
+}
+
+/* Notebook style interactive buttons */
+.doodle-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: transparent;
+  color: var(--ink-primary);
+  border: 1.5px solid var(--ink-primary);
+  border-radius: 255px 15px 225px 15px/15px 225px 15px 255px;
+  padding: 8px 16px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+  transition: transform 0.1s ease, background-color 0.12s ease, border-color 0.12s ease;
+}
+
+.doodle-button:hover {
+  background-color: var(--bg-paper-alt);
+}
+
+.doodle-button:active {
+  transform: scale(0.97) translateY(1px);
+}
+
+.doodle-button.active {
+  background-color: var(--ink-primary);
+  color: var(--bg-paper);
+}
+
+.doodle-button-sm {
+  padding: 4px 10px;
+  font-size: 13px;
+}
+
+.doodle-button-ghost {
+  border-color: transparent;
+  color: var(--ink-secondary);
+}
+
+.doodle-button-ghost:hover {
+  border-color: var(--border-subtle);
+  color: var(--ink-primary);
+}
+
+/* Tactile number pad button */
+.numpad-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 48px;
+  width: 100%;
+  max-width: 46px;
+  background-color: transparent;
+  border: 1.5px solid var(--ink-primary);
+  border-radius: 255px 12px 225px 12px/12px 225px 12px 255px;
+  font-family: var(--font-sans);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--ink-primary);
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+  transition: transform 0.08s ease, background-color 0.1s ease, opacity 0.15s ease;
+  position: relative;
+}
+
+.numpad-btn:hover {
+  background-color: var(--bg-paper-alt);
+}
+
+.numpad-btn:active {
+  transform: scale(0.94) translateY(1px);
+}
+
+.numpad-btn.completed {
+  opacity: 0.28;
+  border-color: var(--border-subtle);
+  text-decoration: line-through;
+}
+
+.numpad-btn .count-badge {
+  position: absolute;
+  bottom: 2px;
+  right: 4px;
+  font-size: 9px;
+  font-family: var(--font-doodle);
+  color: var(--ink-muted);
+  line-height: 1;
+}
+
+/* Handwritten Underline */
+.doodle-underline {
+  position: relative;
+  display: inline-block;
+}
+
+.doodle-underline::after {
+  content: "";
+  position: absolute;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  height: 2px;
+  background: currentColor;
+  border-radius: 255px 10px 225px 10px/10px 225px 10px 255px;
+  opacity: 0.85;
+}
+
+/* Sudoku Board Container */
+.sudoku-container {
+  width: 100%;
+  max-width: var(--board-max-size);
+  aspect-ratio: 1 / 1;
+  margin: 0 auto;
+  user-select: none;
+  position: relative;
+}
+
+.sudoku-grid {
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+  grid-template-rows: repeat(9, 1fr);
+  width: 100%;
+  height: 100%;
+  border: 2px solid var(--ink-primary);
+  background-color: var(--bg-paper);
+}
+
+/* Sudoku Cell */
+.sudoku-cell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-right: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: clamp(18px, 4.5vw, 26px);
+  font-weight: 500;
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+  transition: background-color 0.08s ease;
+  overflow: hidden;
+}
+
+/* Block borders (thicker 3x3 dividers) */
+.sudoku-cell.block-right {
+  border-right: 2px solid var(--ink-primary);
+}
+
+.sudoku-cell.block-bottom {
+  border-bottom: 2px solid var(--ink-primary);
+}
+
+.sudoku-cell.edge-right {
+  border-right: none;
+}
+
+.sudoku-cell.edge-bottom {
+  border-bottom: none;
+}
+
+/* Cell highlight states */
+.sudoku-cell.peer-highlight {
+  background-color: var(--highlight-peer);
+}
+
+.sudoku-cell.match-highlight {
+  background-color: var(--highlight-match);
+}
+
+.sudoku-cell.selected {
+  background-color: var(--highlight-cell) !important;
+}
+
+.sudoku-cell.is-given {
+  font-weight: 700;
+  color: var(--ink-primary);
+}
+
+.sudoku-cell.is-user {
+  font-weight: 600;
+  color: #2D3748;
+}
+
+.sudoku-cell.is-mistake {
+  color: var(--error-ink) !important;
+  background-color: var(--error-bg);
+}
+
+/* Pencil candidates mini-grid */
+.cell-notes-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  width: 100%;
+  height: 100%;
+  padding: 2px;
+}
+
+.cell-note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(8px, 1.8vw, 11px);
+  font-family: var(--font-sans);
+  font-weight: 500;
+  color: var(--ink-secondary);
+  line-height: 1;
+}
+
+/* Notebook rule line */
+.notebook-rule {
+  height: 1px;
+  background-color: var(--border-subtle);
+  width: 100%;
+  margin: 16px 0;
+}
+
+/* Tactile inputs */
+.doodle-input {
+  width: 100%;
+  background: transparent;
+  border: 1.5px solid var(--ink-primary);
+  border-radius: 255px 12px 225px 12px/12px 225px 12px 255px;
+  padding: 10px 14px;
+  font-size: 15px;
+  color: var(--ink-primary);
+  font-family: var(--font-sans);
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.doodle-input:focus {
+  border-color: var(--ink-primary);
+  box-shadow: 0 0 0 2px rgba(25, 25, 25, 0.08);
+}
+
+/* Animations */
+@keyframes pencilDraw {
+  from {
+    stroke-dashoffset: 100;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes gentlePop {
+  0% {
+    transform: scale(0.92);
+  }
+  60% {
+    transform: scale(1.04);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.animate-pop {
+  animation: gentlePop 0.15s ease-out forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

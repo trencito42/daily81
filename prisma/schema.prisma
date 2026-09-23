@@ -1,0 +1,286 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                  String            @id @default(cuid())
+  email               String            @unique
+  username            String            @unique @db.VarChar(30)
+  passwordHash        String            @map("password_hash")
+  displayName         String            @map("display_name")
+  xp                  Int               @default(0)
+  level               Int               @default(1)
+  currentStreak       Int               @default(0) @map("current_streak")
+  longestStreak       Int               @default(0) @map("longest_streak")
+  lastDailyDate       String?           @map("last_daily_date") @db.VarChar(10)
+  
+  statsVisibility     String            @default("public") @map("stats_visibility") @db.VarChar(20) // public, friends, private
+  activityVisibility  String            @default("public") @map("activity_visibility") @db.VarChar(20)
+  allowFriendRequests Boolean           @default(true) @map("allow_friend_requests")
+  allowChallengesFrom String            @default("everyone") @map("allow_challenges_from") @db.VarChar(20) // everyone, friends, none
+
+  createdAt           DateTime          @default(now()) @map("created_at")
+  updatedAt           DateTime          @updatedAt @map("updated_at")
+
+  sessions            GameSession[]
+  dailyCompletions    DailyCompletion[]
+  xpEvents            XpEvent[]
+  
+  sentFriendRequests     FriendRequest[]     @relation("sent_requests")
+  receivedFriendRequests FriendRequest[]     @relation("received_requests")
+  friendshipsAsUser1     Friendship[]        @relation("user1_friendships")
+  friendshipsAsUser2     Friendship[]        @relation("user2_friendships")
+  blockedUsers           UserBlock[]         @relation("blocker_blocks")
+  blockedByUsers         UserBlock[]         @relation("blocked_blocks")
+
+  sentChallenges         Challenge[]         @relation("challenger_challenges")
+  receivedChallenges     Challenge[]         @relation("opponent_challenges")
+  challengeAttempts      ChallengeAttempt[]
+  notifications          Notification[]
+  activities             UserActivity[]
+
+  @@index([username])
+  @@index([xp])
+  @@index([currentStreak])
+  @@index([level])
+  @@map("users")
+}
+
+model Puzzle {
+  id            String            @id @default(cuid())
+  puzzleKey     String            @unique @map("puzzle_key")
+  date          String?           @db.VarChar(10)
+  difficulty    String            @db.VarChar(20)
+  initialGrid   String            @map("initial_grid") @db.VarChar(81)
+  solutionGrid  String            @map("solution_grid") @db.VarChar(81)
+  seed          String            @db.VarChar(100)
+  createdAt     DateTime          @default(now()) @map("created_at")
+
+  sessions         GameSession[]
+  dailyCompletions DailyCompletion[]
+
+  @@index([date])
+  @@index([difficulty])
+  @@map("puzzles")
+}
+
+model GameSession {
+  id             String    @id @default(cuid())
+  userId         String?   @map("user_id")
+  puzzleId       String    @map("puzzle_id")
+  currentGrid    String    @map("current_grid") @db.VarChar(81)
+  notesData      String?   @map("notes_data") @db.Text
+  elapsedSeconds Int       @default(0) @map("elapsed_seconds")
+  mistakes       Int       @default(0)
+  hintsUsed      Int       @default(0) @map("hints_used")
+  completed      Boolean   @default(false)
+  completedAt    DateTime? @map("completed_at")
+  xpAwarded      Int       @default(0) @map("xp_awarded")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  user     User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  puzzle   Puzzle    @relation(fields: [puzzleId], references: [id], onDelete: Cascade)
+  xpEvents XpEvent[]
+
+  @@index([userId])
+  @@index([puzzleId])
+  @@map("game_sessions")
+}
+
+model DailyCompletion {
+  id             String   @id @default(cuid())
+  userId         String   @map("user_id")
+  puzzleId       String   @map("puzzle_id")
+  date           String   @db.VarChar(10)
+  elapsedSeconds Int      @map("elapsed_seconds")
+  mistakes       Int      @default(0)
+  hintsUsed      Int      @default(0) @map("hints_used")
+  xpAwarded      Int      @map("xp_awarded")
+  completedAt    DateTime @default(now()) @map("completed_at")
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  puzzle Puzzle @relation(fields: [puzzleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date], name: "user_daily_unique")
+  @@index([userId])
+  @@index([date])
+  @@index([date, hintsUsed, elapsedSeconds, mistakes, completedAt])
+  @@map("daily_completions")
+}
+
+model XpEvent {
+  id            String       @id @default(cuid())
+  userId        String       @map("user_id")
+  gameSessionId String?      @map("game_session_id")
+  amount        Int
+  reason        String       @db.VarChar(50)
+  createdAt     DateTime     @default(now()) @map("created_at")
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gameSession GameSession? @relation(fields: [gameSessionId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([userId, createdAt])
+  @@map("xp_events")
+}
+
+model Friendship {
+  id        String   @id @default(cuid())
+  userId1   String   @map("user_id_1")
+  userId2   String   @map("user_id_2")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user1 User @relation("user1_friendships", fields: [userId1], references: [id], onDelete: Cascade)
+  user2 User @relation("user2_friendships", fields: [userId2], references: [id], onDelete: Cascade)
+
+  @@unique([userId1, userId2], name: "canonical_friendship_unique")
+  @@index([userId1])
+  @@index([userId2])
+  @@map("friendships")
+}
+
+model FriendRequest {
+  id         String   @id @default(cuid())
+  senderId   String   @map("sender_id")
+  receiverId String   @map("receiver_id")
+  status     String   @default("pending") @db.VarChar(20) // pending, accepted, declined, cancelled
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  sender   User @relation("sent_requests", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User @relation("received_requests", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@unique([senderId, receiverId], name: "friend_request_pair_unique")
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([status])
+  @@map("friend_requests")
+}
+
+model UserBlock {
+  id        String   @id @default(cuid())
+  blockerId String   @map("blocker_id")
+  blockedId String   @map("blocked_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  blocker User @relation("blocker_blocks", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked User @relation("blocked_blocks", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerId, blockedId], name: "user_block_unique")
+  @@index([blockerId])
+  @@index([blockedId])
+  @@map("user_blocks")
+}
+
+model Challenge {
+  id                 String    @id @default(cuid())
+  challengerId       String    @map("challenger_id")
+  opponentId         String    @map("opponent_id")
+  mode               String    @db.VarChar(30) // duel, best_of_3, time_attack, sprint, daily_duel
+  difficulty         String    @db.VarChar(20) // easy, medium, hard, expert
+  timeLimitMinutes   Int?      @map("time_limit_minutes")
+  sprintCount        Int?      @map("sprint_count")
+  status             String    @default("pending") @db.VarChar(20) // pending, accepted, declined, active, completed, expired, cancelled
+  seed               String    @db.VarChar(100)
+  note               String?   @db.VarChar(100)
+  winnerId           String?   @map("winner_id")
+  isTie              Boolean   @default(false) @map("is_tie")
+  rematchChallengeId String?   @map("rematch_challenge_id")
+  expiresAt          DateTime  @map("expires_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  challenger User @relation("challenger_challenges", fields: [challengerId], references: [id], onDelete: Cascade)
+  opponent   User @relation("opponent_challenges", fields: [opponentId], references: [id], onDelete: Cascade)
+
+  rounds   ChallengeRound[]
+  attempts ChallengeAttempt[]
+
+  @@index([challengerId])
+  @@index([opponentId])
+  @@index([status])
+  @@index([expiresAt])
+  @@map("challenges")
+}
+
+model ChallengeRound {
+  id           String   @id @default(cuid())
+  challengeId  String   @map("challenge_id")
+  roundNumber  Int      @map("round_number")
+  puzzleKey    String   @map("puzzle_key") @db.VarChar(100)
+  initialGrid  String   @map("initial_grid") @db.VarChar(81)
+  solutionGrid String   @map("solution_grid") @db.VarChar(81)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  @@unique([challengeId, roundNumber], name: "challenge_round_unique")
+  @@index([challengeId])
+  @@map("challenge_rounds")
+}
+
+model ChallengeAttempt {
+  id             String    @id @default(cuid())
+  challengeId    String    @map("challenge_id")
+  userId         String    @map("user_id")
+  roundNumber    Int       @default(1) @map("round_number")
+  startedAt      DateTime  @default(now()) @map("started_at")
+  completedAt    DateTime? @map("completed_at")
+  elapsedSeconds Int       @default(0) @map("elapsed_seconds")
+  puzzlesSolved  Int       @default(0) @map("puzzles_solved")
+  mistakes       Int       @default(0)
+  hintsUsed      Int       @default(0) @map("hints_used")
+  finalGrid      String?   @map("final_grid") @db.VarChar(81)
+  isCompleted    Boolean   @default(false) @map("is_completed")
+  isFlagged      Boolean   @default(false) @map("is_flagged")
+  xpAwarded      Int       @default(0) @map("xp_awarded")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([challengeId, userId, roundNumber], name: "challenge_user_round_unique")
+  @@index([challengeId])
+  @@index([userId])
+  @@map("challenge_attempts")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  type      String   @db.VarChar(40) // friend_request, friend_accepted, challenge_received, challenge_accepted, challenge_completed
+  title     String   @db.VarChar(100)
+  message   String   @db.VarChar(255)
+  link      String?  @db.VarChar(255)
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, read])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+model UserActivity {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  type      String   @db.VarChar(40) // daily_solved, level_up, streak_milestone, challenge_won
+  metadata  String?  @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("user_activities")
+}
