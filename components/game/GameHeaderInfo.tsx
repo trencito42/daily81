@@ -16,6 +16,7 @@ interface GameHeaderInfoProps {
   showTimer?: boolean;
   showMistakes?: boolean;
   streak?: number;
+  syncStatus?: "saved" | "saving" | "offline" | null;
 }
 
 export function GameHeaderInfo({
@@ -29,6 +30,7 @@ export function GameHeaderInfo({
   showTimer = true,
   showMistakes = true,
   streak,
+  syncStatus = null,
 }: GameHeaderInfoProps) {
   const minutes = Math.floor(elapsedSeconds / 60);
   const seconds = elapsedSeconds % 60;
@@ -125,13 +127,33 @@ export function GameHeaderInfo({
 
         {showMistakes && (
           <div
-            className="font-doodle"
             style={{
-              color: mistakes > 0 ? "var(--error-ink)" : "var(--ink-secondary)",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
               fontSize: "13px",
             }}
           >
-            mistakes: {mistakes}
+            {syncStatus && (
+              <span
+                style={{
+                  fontSize: "11px",
+                  color: syncStatus === "offline" ? "var(--ink-muted)" : "var(--ink-secondary)",
+                  opacity: 0.8,
+                  fontFamily: "var(--font-doodle)",
+                }}
+              >
+                {syncStatus === "saving" ? "syncing..." : syncStatus === "saved" ? "synced" : "offline"}
+              </span>
+            )}
+            <span
+              className="font-doodle"
+              style={{
+                color: mistakes > 0 ? "var(--error-ink)" : "var(--ink-secondary)",
+              }}
+            >
+              mistakes: {mistakes}
+            </span>
           </div>
         )}
       </div>

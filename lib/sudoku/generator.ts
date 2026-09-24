@@ -1,5 +1,5 @@
 import { CELL_COUNT, DIFFICULTY_CONFIG, BLOCK_SIZE, BOARD_SIZE } from "./constants";
-import { Difficulty, SudokuPuzzle } from "./types";
+import { Difficulty, ServerSudokuPuzzle } from "./types";
 import { PRNG } from "./prng";
 import { countSolutions, solveSudoku } from "./solver";
 import { getIndex } from "./validate";
@@ -33,7 +33,7 @@ function generateFullBoard(prng: PRNG): string {
 /**
  * Generates a playable Sudoku puzzle with a guaranteed UNIQUE solution
  */
-export function generateSudoku(difficulty: Difficulty, seedInput?: string, date?: string | null): SudokuPuzzle {
+export function generateSudoku(difficulty: Difficulty, seedInput?: string, date?: string | null): ServerSudokuPuzzle {
   const seed = seedInput || `daily81-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
   const prng = new PRNG(seed);
   const config = DIFFICULTY_CONFIG[difficulty];
@@ -85,7 +85,8 @@ export function generateSudoku(difficulty: Difficulty, seedInput?: string, date?
  * Generates the official Daily Sudoku for a specific YYYY-MM-DD date.
  * Deterministic for all players.
  */
-export function generateDailySudoku(dateStr: string, difficulty: Difficulty = "hard"): SudokuPuzzle {
+export function generateDailySudoku(dateStr: string, difficulty: Difficulty = "hard"): ServerSudokuPuzzle {
   const seed = `daily81-${dateStr}`;
   return generateSudoku(difficulty, seed, dateStr);
 }
+

@@ -66,48 +66,66 @@ export function saveSettings(settings: GameSettings) {
   }
 }
 
+export function getPuzzleStorageKey(puzzleKey?: string): string {
+  return puzzleKey ? `daily81_game_${puzzleKey}` : ACTIVE_GAME_KEY;
+}
+
 export function saveActiveGame(game: SudokuGameState) {
-  if (typeof window === "undefined") return;
+  if (typeof window === "undefined" || !game.puzzle?.puzzleKey) return;
   try {
-    localStorage.setItem(
-      ACTIVE_GAME_KEY,
-      JSON.stringify({
-        puzzle: game.puzzle,
-        cells: game.cells,
-        selectedIndex: game.selectedIndex,
-        pencilMode: game.pencilMode,
-        mistakes: game.mistakes,
-        hintsUsed: game.hintsUsed,
-        elapsedSeconds: game.elapsedSeconds,
-        isStarted: game.isStarted,
-        isCompleted: game.isCompleted,
-        savedAt: Date.now(),
-      })
-    );
+    const payload = JSON.stringify({
+      puzzle: game.puzzle,
+      cells: game.cells,
+      selectedIndex: game.selectedIndex,
+      pencilMode: game.pencilMode,
+      mistakes: game.mistakes,
+      hintsUsed: game.hintsUsed,
+      elapsedSeconds: game.elapsedSeconds,
+      isStarted: game.isStarted,
+      isCompleted: game.isCompleted,
+      savedAt: Date.now(),
+    });
+
+    // Save per-puzzle key
+    localStorage.setItem(getPuzzleStorageKey(game.puzzle.puzzleKey), payload);
+    // Also save default active pointer
+    localStorage.setItem(ACTIVE_GAME_KEY, payload);
   } catch {
     // Storage quota
   }
 }
 
-export function loadActiveGame(): Partial<SudokuGameState> | null {
+export function loadActiveGame(puzzleKey?: string): Partial<SudokuGameState> | null {
   if (typeof window === "undefined") return null;
   try {
+    if (puzzleKey) {
+      const specific = localStorage.getItem(getPuzzleStorageKey(puzzleKey));
+      if (specific) return JSON.parse(specific);
+    }
     const raw = localStorage.getItem(ACTIVE_GAME_KEY);
     if (!raw) return null;
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    if (puzzleKey && parsed.puzzle?.puzzleKey !== puzzleKey) {
+      return null;
+    }
+    return parsed;
   } catch {
     return null;
   }
 }
 
-export function clearActiveGame() {
+export function clearActiveGame(puzzleKey?: string) {
   if (typeof window === "undefined") return;
   try {
+    if (puzzleKey) {
+      localStorage.removeItem(getPuzzleStorageKey(puzzleKey));
+    }
     localStorage.removeItem(ACTIVE_GAME_KEY);
   } catch {
     // Ignore
   }
 }
+
 
 export function loadGuestProfile(): GuestProfile {
   if (typeof window === "undefined") return DEFAULT_GUEST_PROFILE;

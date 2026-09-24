@@ -5,6 +5,7 @@ import { isGridCompleteAndValid } from "../sudoku/validate";
 import { getLevelFromXP, calculatePuzzleXP } from "../xp/progression";
 import { getCanonicalPair } from "../friends/friends";
 import { validateUsername } from "../auth/username";
+import { toPublicPuzzle } from "../puzzles/puzzleService";
 
 describe("Daily Puzzle Date & Timezone Integrity", () => {
   it("uses canonical UTC date string YYYY-MM-DD", () => {
@@ -45,6 +46,27 @@ describe("Daily Puzzle Date & Timezone Integrity", () => {
     const res3 = calculateNewStreak(10, 15, "2026-09-20", "2026-09-24");
     expect(res3.currentStreak).toBe(1);
     expect(res3.longestStreak).toBe(15);
+  });
+});
+
+describe("Puzzle Security & Solution Secrecy", () => {
+  it("toPublicPuzzle strips solutionGrid completely", () => {
+    const serverPuzzle = generateDailySudoku("2026-09-24", "hard");
+    expect(serverPuzzle.solutionGrid).toBeDefined();
+
+    const publicPuzzle = toPublicPuzzle({
+      id: "test-id",
+      puzzleKey: serverPuzzle.puzzleKey,
+      date: serverPuzzle.date,
+      difficulty: serverPuzzle.difficulty,
+      initialGrid: serverPuzzle.initialGrid,
+      seed: serverPuzzle.seed || "seed",
+    });
+
+    expect((publicPuzzle as any).solutionGrid).toBeUndefined();
+    expect(publicPuzzle.puzzleKey).toBe("daily-2026-09-24");
+    expect(publicPuzzle.initialGrid.length).toBe(81);
+    expect(publicPuzzle.givensCount).toBeGreaterThan(0);
   });
 });
 
@@ -132,3 +154,4 @@ describe("Competitive Leaderboard & Social Invariants", () => {
     expect(validateUsername("valid_player12").valid).toBe(true);
   });
 });
+

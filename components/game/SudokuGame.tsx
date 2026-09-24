@@ -7,7 +7,7 @@ import {
   SudokuMove,
   GameSettings,
   XPBreakdown,
-  Difficulty,
+  CompletionResult,
 } from "@/lib/sudoku/types";
 import { getRow, getCol, getBlock, getPeers, isGridCompleteAndValid } from "@/lib/sudoku/validate";
 import { soundEngine } from "@/lib/client/audio";
@@ -20,12 +20,97 @@ import {
   recordGuestGameCompletion,
   loadGuestProfile,
   markDailyDateCompleted,
+  getCompletedDailyDates,
 } from "@/lib/client/storage";
 import { calculatePuzzleXP } from "@/lib/xp/progression";
 import { SudokuBoard } from "./SudokuBoard";
 import { NumberPad } from "./NumberPad";
 import { GameHeaderInfo } from "./GameHeaderInfo";
 import { CompletionSheet } from "./CompletionSheet";
+
+const IS_DEV = process.env.NODE_ENV !== "production";
+
+function logSync(...args: any[]) {
+  if (IS_DEV) {
+    console.log("[daily81 sync]", ...args);
+  }
+}
+
+/**
+ * Three-way merge for Sudoku cells between:
+ * - baseGrid: last acknowledged server grid
+ * - localCells: current live local board (may contain newer user moves)
+ * - serverGrid: newly received server grid (may contain moves from another device)
+ */
+function threeWayMergeCells(
+  baseGrid: string,
+  localCells: CellState[],
+  serverGrid: string,
+  initialGrid: string,
+  serverNotes?: Record<string, number[]>
+): { mergedCells: CellState[]; hasChanges: boolean } {
+  let hasChanges = false;
+  const merged: CellState[] = localCells.map((c) => {
+    const idx = c.index;
+    const isGiven = initialGrid[idx] !== "0";
+    if (isGiven) {
+      return { ...c, value: parseInt(initialGrid[idx], 10), given: true, notes: [] };
+    }
+
+    const baseVal = parseInt(baseGrid[idx] || "0", 10);
+    const localVal = c.value;
+    const serverVal = parseInt(serverGrid[idx] || "0", 10);
+
+    let finalVal = localVal;
+    let finalNotes = [...c.notes];
+
+    if (localVal === baseVal && serverVal !== baseVal) {
+      // Remote device filled this cell; local user hasn't touched it -> accept remote
+      finalVal = serverVal;
+      finalNotes = serverNotes?.[idx] ? [...serverNotes[idx]] : [];
+      hasChanges = true;
+    } else if (serverVal === baseVal && localVal !== baseVal) {
+      // Local user filled this cell; remote hasn't seen it yet -> keep local
+      finalVal = localVal;
+    } else if (localVal === serverVal) {
+      // Both match -> keep
+      finalVal = localVal;
+    } else {
+      // Both devices modified this cell differently:
+      if (serverVal !== 0 && localVal === 0) {
+        finalVal = serverVal;
+        hasChanges = true;
+      } else if (localVal !== 0 && serverVal === 0) {
+        finalVal = localVal;
+      } else {
+        // Both non-zero but different: prefer canonical server
+        finalVal = serverVal !== 0 ? serverVal : localVal;
+        hasChanges = true;
+      }
+    }
+
+    // Merge pencil notes if cell is empty
+    if (finalVal === 0 && serverNotes?.[idx]) {
+      const serverCellNotes = serverNotes[idx];
+      const union = Array.from(new Set([...finalNotes, ...serverCellNotes])).sort((a, b) => a - b);
+      if (union.length !== finalNotes.length) {
+        finalNotes = union;
+        hasChanges = true;
+      }
+    } else if (finalVal !== 0) {
+      finalNotes = [];
+    }
+
+    return {
+      ...c,
+      value: finalVal,
+      notes: finalNotes,
+      isMistake: false,
+    };
+  });
+
+  return { mergedCells: merged, hasChanges };
+}
 
 interface SudokuGameProps {
   initialPuzzle: SudokuPuzzle;
@@ -51,15 +136,68 @@ export function SudokuGame({
   const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
   const [isStarted, setIsStarted] = useState<boolean>(false);
   const [isPaused, setIsPaused] = useState<boolean>(false);
-  const [isCompleted, setIsCompleted] = useState<boolean>(false);
+
+  // Completion & practice state
+  const [officialCompleted, setOfficialCompleted] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    const guest = loadGuestProfile();
+    const isGuestCompleted = guest.completedPuzzleKeys.includes(initialPuzzle.puzzleKey);
+    const isDailyDateMarked = isDaily && dateStr && getCompletedDailyDates().includes(dateStr);
+    return Boolean(isGuestCompleted || isDailyDateMarked);
+  });
+  const [completionResult, setCompletionResult] = useState<CompletionResult | null>(null);
+  const [practiceMode, setPracticeMode] = useState<boolean>(false);
+  const [practiceCompleted, setPracticeCompleted] = useState<boolean>(false);
   const [xpBreakdown, setXpBreakdown] = useState<XPBreakdown | null>(null);
 
+  const [syncStatus, setSyncStatus] = useState<"saved" | "saving" | "offline" | null>(null);
+  const [loadingProgress, setLoadingProgress] = useState<boolean>(true);
+
+  // Latest-state REFS (to eliminate stale closures across async operations)
+  const cellsRef = useRef<CellState[]>([]);
+  cellsRef.current = cells;
+
+  const mistakesRef = useRef<number>(0);
+  mistakesRef.current = mistakes;
+
+  const hintsUsedRef = useRef<number>(0);
+  hintsUsedRef.current = hintsUsed;
+
+  const elapsedSecondsRef = useRef<number>(0);
+  elapsedSecondsRef.current = elapsedSeconds;
+
+  const isStartedRef = useRef<boolean>(false);
+  isStartedRef.current = isStarted;
+
+  const isPausedRef = useRef<boolean>(false);
+  isPausedRef.current = isPaused;
+
+  const pencilModeRef = useRef<boolean>(false);
+  pencilModeRef.current = pencilMode;
+
+  const selectedIndexRef = useRef<number | null>(null);
+  selectedIndexRef.current = selectedIndex;
+
+  const officialCompletedRef = useRef<boolean>(officialCompleted);
+  officialCompletedRef.current = officialCompleted;
+
+  const practiceModeRef = useRef<boolean>(practiceMode);
+  practiceModeRef.current = practiceMode;
+
+  // Concurrency and Revision Tracking Refs
   const historyRef = useRef<SudokuMove[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const serverVersionRef = useRef<number>(1);
   const isSavingRef = useRef<boolean>(false);
-  const pendingSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const saveQueuedRef = useRef<boolean>(false);
+  const gameplaySaveDebounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lastPeriodicSaveRef = useRef<number>(0);
+
+  const boardRevisionRef = useRef<number>(0);
+  const cellRevisionsRef = useRef<number[]>(new Array(81).fill(0));
+  const cellMistakeTokenRef = useRef<number[]>(new Array(81).fill(0));
+  const lastAcknowledgedGridRef = useRef<string>(initialPuzzle.initialGrid);
+  const fetchRequestIdRef = useRef<number>(0);
 
   // Helper to build initial cells array
   const buildInitialCells = useCallback((gridStr: string, notesMap?: Record<string, number[]>): CellState[] => {
@@ -82,13 +220,256 @@ export function SudokuGame({
     return list;
   }, [initialPuzzle.initialGrid]);
 
+  // Flush remote autosave reading from LATEST refs with save queueing
+  const flushRemoteAutosave = useCallback(async (keepalive = false) => {
+    if (practiceModeRef.current || officialCompletedRef.current) return;
+    if (cellsRef.current.length !== 81 || !isStartedRef.current) return;
+
+    if (isSavingRef.current) {
+      logSync("Save already in flight; queuing next save.");
+      saveQueuedRef.current = true;
+      return;
+    }
+
+    try {
+      isSavingRef.current = true;
+      setSyncStatus("saving");
+
+      const currentGrid = cellsRef.current.map((c) => c.value).join("");
+      const notesMap: Record<string, number[]> = {};
+      cellsRef.current.forEach((c) => {
+        if (c.notes && c.notes.length > 0) {
+          notesMap[c.index] = c.notes;
+        }
+      });
+
+      const currentElapsed = elapsedSecondsRef.current;
+      const currentMistakes = mistakesRef.current;
+      const currentHints = hintsUsedRef.current;
+      const currentStarted = isStartedRef.current;
+      const sentVersion = serverVersionRef.current;
+
+      logSync(`Starting autosave v${sentVersion} (${currentGrid.slice(0, 10)}...)`);
+
+      const res = await fetch(`/api/progress/${encodeURIComponent(initialPuzzle.puzzleKey)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        keepalive,
+        body: JSON.stringify({
+          currentGrid,
+          notes: notesMap,
+          elapsedSeconds: currentElapsed,
+          mistakes: currentMistakes,
+          hintsUsed: currentHints,
+          isStarted: currentStarted,
+          expectedVersion: sentVersion,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.progress) {
+          serverVersionRef.current = data.progress.version;
+          lastAcknowledgedGridRef.current = currentGrid;
+          setSyncStatus("saved");
+          logSync(`Autosave accepted, new version v${data.progress.version}`);
+
+          // Broadcast to other tabs
+          if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+            try {
+              const channel = new BroadcastChannel("daily81-progress");
+              channel.postMessage({ puzzleKey: initialPuzzle.puzzleKey, version: data.progress.version });
+              channel.close();
+            } catch {}
+          }
+        }
+      } else if (res.status === 409) {
+        // 409 Conflict Reconciliation with Three-Way Merge
+        const data = await res.json();
+        if (data.progress) {
+          const p = data.progress;
+          serverVersionRef.current = p.version;
+          setSyncStatus("saved");
+          logSync(`Autosave 409 conflict. Remote v${p.version}. Reconciling...`);
+
+          if (p.completed) {
+            setOfficialCompleted(true);
+            setCompletionResult({
+              elapsedSeconds: p.elapsedSeconds ?? 0,
+              mistakes: p.mistakes ?? 0,
+              hintsUsed: p.hintsUsed ?? 0,
+              xpAwarded: p.xpAwarded ?? 0,
+              completedAt: p.completedAt,
+              leaderboardEligible: p.leaderboardEligible,
+              dateStr: p.date || dateStr || initialPuzzle.date,
+              difficulty: p.difficulty || initialPuzzle.difficulty,
+              isDaily: Boolean(p.isDaily ?? isDaily),
+              rank: p.rank,
+            });
+            clearActiveGame(initialPuzzle.puzzleKey);
+          } else if (p.currentGrid && p.currentGrid.length === 81) {
+            // Three-way merge: base = lastAcknowledgedGrid, local = cellsRef.current, remote = p.currentGrid
+            setCells((currentLocalCells) => {
+              const { mergedCells, hasChanges } = threeWayMergeCells(
+                lastAcknowledgedGridRef.current,
+                currentLocalCells,
+                p.currentGrid,
+                initialPuzzle.initialGrid,
+                p.notes
+              );
+              lastAcknowledgedGridRef.current = p.currentGrid;
+              if (hasChanges) {
+                boardRevisionRef.current++;
+                saveQueuedRef.current = true;
+              }
+              return mergedCells;
+            });
+
+            setMistakes((prev) => Math.max(prev, p.mistakes || 0));
+            setHintsUsed((prev) => Math.max(prev, p.hintsUsed || 0));
+            setElapsedSeconds((prev) => Math.max(prev, p.elapsedSeconds || 0));
+          }
+        }
+      }
+    } catch (err) {
+      logSync("Autosave offline/failed:", err);
+      setSyncStatus("offline");
+    } finally {
+      isSavingRef.current = false;
+      if (saveQueuedRef.current) {
+        saveQueuedRef.current = false;
+        logSync("Flushing queued save with newest state.");
+        flushRemoteAutosave();
+      }
+    }
+  }, [initialPuzzle.puzzleKey, initialPuzzle.difficulty, initialPuzzle.date, isDaily, dateStr]);
+
+  // Trigger debounced gameplay autosave (only called upon meaningful local mutations)
+  const triggerGameplayAutosave = useCallback(() => {
+    if (practiceModeRef.current || officialCompletedRef.current) return;
+
+    // Save locally immediately
+    saveActiveGame({
+      puzzle: initialPuzzle,
+      cells: cellsRef.current,
+      selectedIndex: selectedIndexRef.current,
+      pencilMode: pencilModeRef.current,
+      mistakes: mistakesRef.current,
+      hintsUsed: hintsUsedRef.current,
+      elapsedSeconds: elapsedSecondsRef.current,
+      isStarted: isStartedRef.current,
+      isPaused: isPausedRef.current,
+      isCompleted: false,
+      history: historyRef.current,
+      historyIndex: historyRef.current.length,
+    });
+
+    // Debounce remote autosave by 600ms
+    if (gameplaySaveDebounceTimerRef.current) {
+      clearTimeout(gameplaySaveDebounceTimerRef.current);
+    }
+    gameplaySaveDebounceTimerRef.current = setTimeout(() => {
+      flushRemoteAutosave();
+    }, 600);
+  }, [initialPuzzle, flushRemoteAutosave]);
+
+  // Fetch server progress with revision-aware three-way merge
+  const fetchServerProgress = useCallback(async () => {
+    const fetchId = ++fetchRequestIdRef.current;
+    const revisionAtStart = boardRevisionRef.current;
+
+    try {
+      logSync(`Fetching server progress (request #${fetchId})...`);
+      const res = await fetch(`/api/progress/${encodeURIComponent(initialPuzzle.puzzleKey)}`);
+      if (res.ok) {
+        const data = await res.json();
+
+        // Discard stale responses if a newer fetch was initiated
+        if (fetchRequestIdRef.current !== fetchId) {
+          logSync(`Discarding stale fetch #${fetchId}`);
+          return;
+        }
+
+        if (data.progress) {
+          const p = data.progress;
+          serverVersionRef.current = p.version || 1;
+          setSyncStatus("saved");
+
+          if (p.completed) {
+            setOfficialCompleted(true);
+            setCompletionResult({
+              elapsedSeconds: p.elapsedSeconds ?? 0,
+              mistakes: p.mistakes ?? 0,
+              hintsUsed: p.hintsUsed ?? 0,
+              xpAwarded: p.xpAwarded ?? 0,
+              completedAt: p.completedAt,
+              leaderboardEligible: p.leaderboardEligible,
+              dateStr: p.date || dateStr || initialPuzzle.date,
+              difficulty: p.difficulty || initialPuzzle.difficulty,
+              isDaily: Boolean(p.isDaily ?? isDaily),
+              rank: p.rank,
+            });
+            clearActiveGame(initialPuzzle.puzzleKey);
+            setLoadingProgress(false);
+            return;
+          }
+
+          if (p.currentGrid && p.currentGrid.length === 81) {
+            if (boardRevisionRef.current === revisionAtStart) {
+              // No local changes occurred during fetch -> safe direct hydration
+              logSync(`Directly hydrating server progress v${p.version}`);
+              const serverCells = buildInitialCells(p.currentGrid, p.notes);
+              setCells(serverCells);
+              lastAcknowledgedGridRef.current = p.currentGrid;
+            } else {
+              // Local moves WERE made while fetch was in-flight -> perform 3-way merge!
+              logSync(`Local changes detected during fetch #${fetchId}. Running 3-way merge.`);
+              setCells((currentLocalCells) => {
+                const { mergedCells, hasChanges } = threeWayMergeCells(
+                  lastAcknowledgedGridRef.current,
+                  currentLocalCells,
+                  p.currentGrid,
+                  initialPuzzle.initialGrid,
+                  p.notes
+                );
+                lastAcknowledgedGridRef.current = p.currentGrid;
+                if (hasChanges) {
+                  boardRevisionRef.current++;
+                  triggerGameplayAutosave();
+                }
+                return mergedCells;
+              });
+            }
+
+            setMistakes((prev) => Math.max(prev, p.mistakes || 0));
+            setHintsUsed((prev) => Math.max(prev, p.hintsUsed || 0));
+            setElapsedSeconds((prev) => Math.max(prev, p.elapsedSeconds || 0));
+            if (p.isStarted) setIsStarted(true);
+          }
+        }
+      }
+    } catch {
+      setSyncStatus("offline");
+    } finally {
+      setLoadingProgress(false);
+    }
+  }, [
+    initialPuzzle.puzzleKey,
+    initialPuzzle.difficulty,
+    initialPuzzle.initialGrid,
+    initialPuzzle.date,
+    isDaily,
+    dateStr,
+    buildInitialCells,
+    triggerGameplayAutosave,
+  ]);
+
   // Initial load: local cache + server progress sync
   useEffect(() => {
     soundEngine.setEnabled(settings.sound);
 
-    // 1. Initialize from local state if matches
-    const saved = loadActiveGame();
-    let initialLoaded = false;
+    // 1. Initialize from local storage for this puzzle
+    const saved = loadActiveGame(initialPuzzle.puzzleKey);
     if (
       saved &&
       saved.puzzle &&
@@ -103,7 +484,7 @@ export function SudokuGame({
       setHintsUsed(saved.hintsUsed ?? 0);
       setElapsedSeconds(saved.elapsedSeconds ?? 0);
       setIsStarted(saved.isStarted ?? false);
-      initialLoaded = true;
+      lastAcknowledgedGridRef.current = saved.cells.map((c) => c.value).join("");
     } else {
       setCells(buildInitialCells(initialPuzzle.initialGrid));
       setSelectedIndex(null);
@@ -111,49 +492,33 @@ export function SudokuGame({
       setHintsUsed(0);
       setElapsedSeconds(0);
       setIsStarted(false);
-      setIsCompleted(false);
-      setXpBreakdown(null);
       historyRef.current = [];
+      lastAcknowledgedGridRef.current = initialPuzzle.initialGrid;
     }
 
-    // 2. Fetch server progress for authenticated cross-device sync
-    const fetchServerProgress = async () => {
-      try {
-        const res = await fetch(`/api/progress/${encodeURIComponent(initialPuzzle.puzzleKey)}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.progress) {
-            const p = data.progress;
-            serverVersionRef.current = p.version || 1;
+    // 2. Start server progress fetch
+    fetchServerProgress();
+  }, [initialPuzzle.puzzleKey, initialPuzzle.initialGrid, buildInitialCells, settings.sound, fetchServerProgress]);
 
-            if (p.completed) {
-              setIsCompleted(true);
-              clearActiveGame();
-              return;
-            }
-
-            // If server has progress and it's started, reconcile
-            if (p.currentGrid && p.currentGrid.length === 81) {
-              const serverCells = buildInitialCells(p.currentGrid, p.notes);
-              setCells(serverCells);
-              setMistakes(Math.max(saved?.mistakes || 0, p.mistakes || 0));
-              setHintsUsed(Math.max(saved?.hintsUsed || 0, p.hintsUsed || 0));
-              setElapsedSeconds(Math.max(saved?.elapsedSeconds || 0, p.elapsedSeconds || 0));
-              if (p.isStarted) setIsStarted(true);
-            }
-          }
-        }
-      } catch {
-        // Offline fallback
+  // BroadcastChannel for cross-tab sync in same browser
+  useEffect(() => {
+    if (typeof window === "undefined" || !("BroadcastChannel" in window)) return;
+    const channel = new BroadcastChannel("daily81-progress");
+    channel.onmessage = (e) => {
+      if (e.data?.puzzleKey === initialPuzzle.puzzleKey && e.data?.version > serverVersionRef.current) {
+        logSync("BroadcastChannel message received. Refreshing progress...");
+        fetchServerProgress();
       }
     };
+    return () => {
+      channel.close();
+    };
+  }, [initialPuzzle.puzzleKey, fetchServerProgress]);
 
-    fetchServerProgress();
-  }, [initialPuzzle.puzzleKey, initialPuzzle.initialGrid, buildInitialCells, settings.sound]);
-
-  // Handle timer tick
+  // Timer Tick (isolated; does NOT re-trigger remote autosave debounce)
   useEffect(() => {
-    if (isStarted && !isPaused && !isCompleted) {
+    const isGameActive = isStarted && !isPaused && (!officialCompleted || practiceMode) && !practiceCompleted;
+    if (isGameActive) {
       timerRef.current = setInterval(() => {
         setElapsedSeconds((prev) => prev + 1);
       }, 1000);
@@ -164,123 +529,75 @@ export function SudokuGame({
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [isStarted, isPaused, isCompleted]);
+  }, [isStarted, isPaused, officialCompleted, practiceMode, practiceCompleted]);
 
-  // Remote autosave function
-  const flushRemoteAutosave = useCallback(async () => {
-    if (cells.length !== 81 || !isStarted || isCompleted || isSavingRef.current) return;
-
-    try {
-      isSavingRef.current = true;
-      const currentGrid = cells.map((c) => c.value).join("");
-      const notesMap: Record<string, number[]> = {};
-      cells.forEach((c) => {
-        if (c.notes && c.notes.length > 0) {
-          notesMap[c.index] = c.notes;
-        }
-      });
-
-      const res = await fetch(`/api/progress/${encodeURIComponent(initialPuzzle.puzzleKey)}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          currentGrid,
-          notes: notesMap,
-          elapsedSeconds,
-          mistakes,
-          hintsUsed,
-          isStarted,
-          expectedVersion: serverVersionRef.current,
-        }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data.progress) {
-          serverVersionRef.current = data.progress.version;
-        }
-      } else if (res.status === 409) {
-        // Conflict resolution: reconcile to canonical server state
-        const data = await res.json();
-        if (data.progress) {
-          const p = data.progress;
-          serverVersionRef.current = p.version;
-          if (p.completed) {
-            setIsCompleted(true);
-            clearActiveGame();
-          } else if (p.currentGrid && p.currentGrid.length === 81) {
-            setCells(buildInitialCells(p.currentGrid, p.notes));
-            setMistakes(p.mistakes || 0);
-            setHintsUsed(p.hintsUsed || 0);
-            setElapsedSeconds(p.elapsedSeconds || 0);
-          }
-        }
-      }
-    } catch {
-      // Offline fallback
-    } finally {
-      isSavingRef.current = false;
-    }
-  }, [cells, isStarted, isCompleted, elapsedSeconds, mistakes, hintsUsed, initialPuzzle.puzzleKey, buildInitialCells]);
-
-  // Local storage save & debounced server autosave
+  // Periodic Timer Sync (every 15s, separate from gameplay autosave)
   useEffect(() => {
-    if (cells.length === 81 && isStarted && !isCompleted) {
-      saveActiveGame({
-        puzzle: initialPuzzle,
-        cells,
-        selectedIndex,
-        pencilMode,
-        mistakes,
-        hintsUsed,
-        elapsedSeconds,
-        isStarted,
-        isPaused,
-        isCompleted: false,
-        history: historyRef.current,
-        historyIndex: historyRef.current.length,
-      });
-
-      // Debounce server autosave by 800ms
-      if (pendingSaveTimerRef.current) clearTimeout(pendingSaveTimerRef.current);
-      pendingSaveTimerRef.current = setTimeout(() => {
-        flushRemoteAutosave();
-      }, 800);
-    }
-  }, [cells, selectedIndex, pencilMode, mistakes, hintsUsed, isStarted, isCompleted, initialPuzzle, elapsedSeconds, isPaused, flushRemoteAutosave]);
-
-  // Periodic timer sync every 15s without sending requests every single second
-  useEffect(() => {
-    if (isStarted && !isPaused && !isCompleted && elapsedSeconds > 0 && elapsedSeconds - lastPeriodicSaveRef.current >= 15) {
+    if (
+      !practiceMode &&
+      !officialCompleted &&
+      isStarted &&
+      !isPaused &&
+      elapsedSeconds > 0 &&
+      elapsedSeconds - lastPeriodicSaveRef.current >= 15
+    ) {
       lastPeriodicSaveRef.current = elapsedSeconds;
       flushRemoteAutosave();
     }
-  }, [elapsedSeconds, isStarted, isPaused, isCompleted, flushRemoteAutosave]);
+  }, [elapsedSeconds, isStarted, isPaused, officialCompleted, practiceMode, flushRemoteAutosave]);
 
-  // Handle visibility & pagehide flushing
+  // Visibility / Tab focus / pagehide handling
   useEffect(() => {
     const handleVisibility = () => {
-      if (document.visibilityState === "hidden" && isStarted && !isCompleted) {
+      if (document.visibilityState === "hidden" && isStartedRef.current && !officialCompletedRef.current && !practiceModeRef.current) {
         setIsPaused(true);
-        flushRemoteAutosave();
+        flushRemoteAutosave(true);
+      } else if (document.visibilityState === "visible" && !officialCompletedRef.current && !practiceModeRef.current) {
+        fetchServerProgress();
       }
     };
+
     const handlePageHide = () => {
-      if (isStarted && !isCompleted) {
-        flushRemoteAutosave();
+      if (isStartedRef.current && !officialCompletedRef.current && !practiceModeRef.current) {
+        flushRemoteAutosave(true);
+      }
+    };
+
+    const handleFocus = () => {
+      if (!officialCompletedRef.current && !practiceModeRef.current) {
+        fetchServerProgress();
       }
     };
 
     document.addEventListener("visibilitychange", handleVisibility);
     window.addEventListener("pagehide", handlePageHide);
     window.addEventListener("beforeunload", handlePageHide);
+    window.addEventListener("focus", handleFocus);
 
     return () => {
       document.removeEventListener("visibilitychange", handleVisibility);
       window.removeEventListener("pagehide", handlePageHide);
       window.removeEventListener("beforeunload", handlePageHide);
+      window.removeEventListener("focus", handleFocus);
     };
-  }, [isStarted, isCompleted, flushRemoteAutosave]);
+  }, [flushRemoteAutosave, fetchServerProgress]);
+
+  // Start Practice Replay Mode
+  const handleStartPracticeReplay = useCallback(() => {
+    setPracticeMode(true);
+    setPracticeCompleted(false);
+    setCells(buildInitialCells(initialPuzzle.initialGrid));
+    setSelectedIndex(null);
+    setPencilMode(false);
+    setMistakes(0);
+    setHintsUsed(0);
+    setElapsedSeconds(0);
+    setIsStarted(false);
+    setIsPaused(false);
+    historyRef.current = [];
+    boardRevisionRef.current++;
+    cellRevisionsRef.current = new Array(81).fill(0);
+  }, [buildInitialCells, initialPuzzle.initialGrid]);
 
   // Calculate completed numbers & counts
   const { completedNumbers, numberCounts } = React.useMemo(() => {
@@ -305,31 +622,51 @@ export function SudokuGame({
   // Finish game verification and reward calculation
   const handleGameComplete = useCallback(
     async (finalCells: CellState[]) => {
-      setIsCompleted(true);
-      setIsPaused(false);
-      clearActiveGame();
-
       soundEngine.playSolved();
       triggerHaptic("complete", settings.haptics);
 
       const finalGrid = finalCells.map((c) => c.value).join("");
       const isSolved = isGridCompleteAndValid(finalGrid);
 
-      if (!isSolved) {
+      if (!isSolved) return;
+
+      if (practiceModeRef.current) {
+        setPracticeCompleted(true);
+        setIsPaused(false);
         return;
       }
+
+      setOfficialCompleted(true);
+      setIsPaused(false);
+      clearActiveGame(initialPuzzle.puzzleKey);
+
+      const currentElapsed = elapsedSecondsRef.current;
+      const currentMistakes = mistakesRef.current;
+      const currentHints = hintsUsedRef.current;
 
       const guestProfile = loadGuestProfile();
       const xpResult = calculatePuzzleXP({
         difficulty: initialPuzzle.difficulty,
         isDaily,
-        mistakes,
-        hintsUsed,
-        elapsedSeconds,
+        mistakes: currentMistakes,
+        hintsUsed: currentHints,
+        elapsedSeconds: currentElapsed,
         userCurrentXP: guestProfile.xp,
       });
 
       setXpBreakdown(xpResult);
+      setCompletionResult({
+        elapsedSeconds: currentElapsed,
+        mistakes: currentMistakes,
+        hintsUsed: currentHints,
+        xpAwarded: xpResult.totalXP,
+        completedAt: new Date().toISOString(),
+        leaderboardEligible: currentHints === 0 && currentMistakes === 0 && currentElapsed >= 15,
+        dateStr: initialPuzzle.date || dateStr,
+        difficulty: initialPuzzle.difficulty,
+        isDaily,
+        xpBreakdown: xpResult,
+      });
 
       // Record locally for guest
       recordGuestGameCompletion({
@@ -337,14 +674,14 @@ export function SudokuGame({
         difficulty: initialPuzzle.difficulty,
         isDaily,
         dateStr: initialPuzzle.date || dateStr,
-        elapsedSeconds,
-        mistakes,
-        hints: hintsUsed,
+        elapsedSeconds: currentElapsed,
+        mistakes: currentMistakes,
+        hints: currentHints,
         xpEarned: xpResult.totalXP,
       });
 
-      if (isDaily && dateStr) {
-        markDailyDateCompleted(dateStr);
+      if (isDaily && (dateStr || initialPuzzle.date)) {
+        markDailyDateCompleted(dateStr || initialPuzzle.date!);
       }
 
       // Sync server-side atomically
@@ -358,9 +695,9 @@ export function SudokuGame({
             date: initialPuzzle.date || dateStr,
             isDaily,
             finalGrid,
-            elapsedSeconds,
-            mistakes,
-            hintsUsed,
+            elapsedSeconds: currentElapsed,
+            mistakes: currentMistakes,
+            hintsUsed: currentHints,
           }),
         });
 
@@ -369,28 +706,36 @@ export function SudokuGame({
           if (data.xpBreakdown) {
             setXpBreakdown(data.xpBreakdown);
           }
+          if (data.rank !== undefined) {
+            setCompletionResult((prev) => (prev ? { ...prev, rank: data.rank } : null));
+          }
         }
       } catch {
         // Offline fallback
       }
     },
-    [initialPuzzle, isDaily, dateStr, elapsedSeconds, mistakes, hintsUsed, settings.haptics]
+    [initialPuzzle, isDaily, dateStr, settings.haptics]
   );
 
-  // Set number action with secure move check & peer notes restoration
+  // Set number action: OPTIMISTIC placement + atomic functional state update + race-safe validation
   const handleSetNumber = useCallback(
     async (num: number) => {
-      if (selectedIndex === null || isCompleted || isPaused) return;
-      const targetCell = cells[selectedIndex];
-      if (targetCell.given) return;
+      const isInteractionDisabled =
+        (officialCompletedRef.current && !practiceModeRef.current) || isPausedRef.current || practiceCompleted;
+      const selected = selectedIndexRef.current;
+      if (selected === null || isInteractionDisabled) return;
 
-      if (!isStarted) setIsStarted(true);
+      const targetCell = cellsRef.current[selected];
+      if (!targetCell || targetCell.given) return;
 
+      if (!isStartedRef.current) setIsStarted(true);
+
+      const targetIndex = selected;
       const prevValue = targetCell.value;
       const prevNotes = [...targetCell.notes];
 
-      // 1. PENCIL MODE
-      if (pencilMode) {
+      // 1. PENCIL MODE (Atomic local update)
+      if (pencilModeRef.current) {
         const newNotes = targetCell.notes.includes(num)
           ? targetCell.notes.filter((n) => n !== num)
           : [...targetCell.notes, num].sort((a, b) => a - b);
@@ -399,7 +744,7 @@ export function SudokuGame({
         triggerHaptic("note", settings.haptics);
 
         historyRef.current.push({
-          index: selectedIndex,
+          index: targetIndex,
           prevValue,
           newValue: 0,
           prevNotes,
@@ -407,24 +752,26 @@ export function SudokuGame({
           timestamp: Date.now(),
         });
 
+        cellRevisionsRef.current[targetIndex]++;
+        boardRevisionRef.current++;
+
         setCells((prev) =>
           prev.map((c) =>
-            c.index === selectedIndex
-              ? { ...c, value: 0, notes: newNotes, isMistake: false }
-              : c
+            c.index === targetIndex ? { ...c, value: 0, notes: newNotes, isMistake: false } : c
           )
         );
+
+        triggerGameplayAutosave();
         return;
       }
 
-      // 2. NORMAL NUMBER PLACEMENT
+      // 2. ERASE (When typing the same digit)
       if (targetCell.value === num) {
-        // Erase
         soundEngine.playEraser();
         triggerHaptic("tap", settings.haptics);
 
         historyRef.current.push({
-          index: selectedIndex,
+          index: targetIndex,
           prevValue,
           newValue: 0,
           prevNotes,
@@ -432,50 +779,30 @@ export function SudokuGame({
           timestamp: Date.now(),
         });
 
+        cellRevisionsRef.current[targetIndex]++;
+        boardRevisionRef.current++;
+
         setCells((prev) =>
-          prev.map((c) => (c.index === selectedIndex ? { ...c, value: 0, isMistake: false } : c))
+          prev.map((c) => (c.index === targetIndex ? { ...c, value: 0, notes: [], isMistake: false } : c))
         );
+
+        triggerGameplayAutosave();
         return;
       }
 
-      // 3. SECURE MOVE VALIDATION
-      let isCorrect = true;
-      if (initialPuzzle.solutionGrid) {
-        // Client has solutionGrid (e.g. offline mode)
-        const solutionNum = parseInt(initialPuzzle.solutionGrid[selectedIndex], 10);
-        isCorrect = num === solutionNum;
-      } else {
-        // Check with server move check API
-        try {
-          const res = await fetch("/api/game/check-move", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              puzzleKey: initialPuzzle.puzzleKey,
-              index: selectedIndex,
-              number: num,
-            }),
-          });
-          if (res.ok) {
-            const data = await res.json();
-            isCorrect = Boolean(data.correct);
-          }
-        } catch {
-          // Fallback: check peer conflicts client-side
-          const peerIndices = getPeers(selectedIndex);
-          isCorrect = !peerIndices.some((idx) => cells[idx].value === num);
-        }
-      }
+      // 3. OPTIMISTIC DIGIT PLACEMENT (Immediate UI response)
+      soundEngine.playPencilDigit();
+      triggerHaptic("tap", settings.haptics);
 
-      if (isCorrect) {
-        soundEngine.playPencilDigit();
-        triggerHaptic("tap", settings.haptics);
+      const peerIndices = getPeers(targetIndex);
+      const removedPeerNotes: { index: number; notes: number[] }[] = [];
 
-        const peerIndices = getPeers(selectedIndex);
-        const removedPeerNotes: { index: number; notes: number[] }[] = [];
+      const currentCellRevision = ++cellRevisionsRef.current[targetIndex];
+      boardRevisionRef.current++;
 
-        const nextCells = cells.map((c) => {
-          if (c.index === selectedIndex) {
+      setCells((prev) => {
+        return prev.map((c) => {
+          if (c.index === targetIndex) {
             return { ...c, value: num, notes: [], isMistake: false };
           }
           if (settings.autoRemoveNotes && peerIndices.includes(c.index) && c.notes.includes(num)) {
@@ -484,70 +811,108 @@ export function SudokuGame({
           }
           return c;
         });
+      });
 
-        historyRef.current.push({
-          index: selectedIndex,
-          prevValue,
-          newValue: num,
-          prevNotes,
-          newNotes: [],
-          removedPeerNotes,
-          timestamp: Date.now(),
+      historyRef.current.push({
+        index: targetIndex,
+        prevValue,
+        newValue: num,
+        prevNotes,
+        newNotes: [],
+        removedPeerNotes,
+        timestamp: Date.now(),
+      });
+
+      triggerGameplayAutosave();
+
+      // Check immediate completion if all filled
+      const latestGrid = cellsRef.current.map((c) => (c.index === targetIndex ? num : c.value)).join("");
+      if (!latestGrid.includes("0") && isGridCompleteAndValid(latestGrid)) {
+        handleGameComplete(cellsRef.current.map((c) => (c.index === targetIndex ? { ...c, value: num } : c)));
+      }
+
+      // 4. ASYNC BACKGROUND VALIDATION (Race-safe per-cell revision check)
+      let isCorrect = true;
+      try {
+        const res = await fetch("/api/game/check-move", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            puzzleKey: initialPuzzle.puzzleKey,
+            index: targetIndex,
+            number: num,
+          }),
         });
-
-        setCells(nextCells);
-
-        // Check completion
-        const allFilled = nextCells.every((c) => c.value !== 0);
-        if (allFilled) {
-          handleGameComplete(nextCells);
+        if (res.ok) {
+          const data = await res.json();
+          isCorrect = Boolean(data.correct);
         }
-      } else {
-        // MISTAKE
-        soundEngine.playMistake();
-        triggerHaptic("mistake", settings.haptics);
-        setMistakes((prev) => prev + 1);
+      } catch {
+        // Fallback: check peer conflicts client-side
+        isCorrect = !peerIndices.some((idx) => cellsRef.current[idx]?.value === num);
+      }
 
-        setCells((prev) =>
-          prev.map((c) => (c.index === selectedIndex ? { ...c, isMistake: true } : c))
-        );
+      if (!isCorrect) {
+        // Only revert if cell has NOT been modified by a newer move in the meantime!
+        if (cellRevisionsRef.current[targetIndex] === currentCellRevision) {
+          logSync(`Move at index ${targetIndex} (${num}) rejected by server. Reverting.`);
+          soundEngine.playMistake();
+          triggerHaptic("mistake", settings.haptics);
+          setMistakes((prev) => prev + 1);
 
-        setTimeout(() => {
+          const mistakeToken = ++cellMistakeTokenRef.current[targetIndex];
+          cellRevisionsRef.current[targetIndex]++;
+          boardRevisionRef.current++;
+
           setCells((prev) =>
-            prev.map((c) => (c.index === selectedIndex ? { ...c, isMistake: false } : c))
+            prev.map((c) =>
+              c.index === targetIndex ? { ...c, value: 0, isMistake: true } : c
+            )
           );
-        }, 600);
+
+          triggerGameplayAutosave();
+
+          // Clear visual mistake glow after 600ms safely
+          setTimeout(() => {
+            if (cellMistakeTokenRef.current[targetIndex] === mistakeToken) {
+              setCells((prev) =>
+                prev.map((c) => (c.index === targetIndex ? { ...c, isMistake: false } : c))
+              );
+            }
+          }, 600);
+        } else {
+          logSync(`Stale invalidation for cell ${targetIndex} ignored (newer revision active).`);
+        }
       }
     },
     [
-      selectedIndex,
-      isCompleted,
-      isPaused,
-      cells,
-      pencilMode,
+      practiceCompleted,
       settings.haptics,
       settings.autoRemoveNotes,
       initialPuzzle.puzzleKey,
-      initialPuzzle.solutionGrid,
-      isStarted,
+      triggerGameplayAutosave,
       handleGameComplete,
     ]
   );
 
   // Erase action
   const handleErase = useCallback(() => {
-    if (selectedIndex === null || isCompleted || isPaused) return;
-    const targetCell = cells[selectedIndex];
-    if (targetCell.given) return;
+    const isInteractionDisabled =
+      (officialCompletedRef.current && !practiceModeRef.current) || isPausedRef.current || practiceCompleted;
+    const selected = selectedIndexRef.current;
+    if (selected === null || isInteractionDisabled) return;
+
+    const targetCell = cellsRef.current[selected];
+    if (!targetCell || targetCell.given) return;
     if (targetCell.value === 0 && targetCell.notes.length === 0) return;
 
-    if (!isStarted) setIsStarted(true);
+    if (!isStartedRef.current) setIsStarted(true);
 
     soundEngine.playEraser();
     triggerHaptic("tap", settings.haptics);
 
     historyRef.current.push({
-      index: selectedIndex,
+      index: selected,
       prevValue: targetCell.value,
       newValue: 0,
       prevNotes: [...targetCell.notes],
@@ -555,21 +920,30 @@ export function SudokuGame({
       timestamp: Date.now(),
     });
 
+    cellRevisionsRef.current[selected]++;
+    boardRevisionRef.current++;
+
     setCells((prev) =>
-      prev.map((c) =>
-        c.index === selectedIndex ? { ...c, value: 0, notes: [], isMistake: false } : c
-      )
+      prev.map((c) => (c.index === selected ? { ...c, value: 0, notes: [], isMistake: false } : c))
     );
-  }, [selectedIndex, isCompleted, isPaused, cells, isStarted, settings.haptics]);
+
+    triggerGameplayAutosave();
+  }, [practiceCompleted, settings.haptics, triggerGameplayAutosave]);
 
   // Undo action with full peer notes restoration
   const handleUndo = useCallback(() => {
-    if (historyRef.current.length === 0 || isCompleted || isPaused) return;
+    const isInteractionDisabled =
+      (officialCompletedRef.current && !practiceModeRef.current) || isPausedRef.current || practiceCompleted;
+    if (historyRef.current.length === 0 || isInteractionDisabled) return;
+
     const lastMove = historyRef.current.pop();
     if (!lastMove) return;
 
     soundEngine.playEraser();
     triggerHaptic("tap", settings.haptics);
+
+    cellRevisionsRef.current[lastMove.index]++;
+    boardRevisionRef.current++;
 
     setCells((prev) => {
       const removedMap = new Map<number, number[]>();
@@ -599,47 +973,54 @@ export function SudokuGame({
     });
 
     setSelectedIndex(lastMove.index);
-  }, [isCompleted, isPaused, settings.haptics]);
+    triggerGameplayAutosave();
+  }, [practiceCompleted, settings.haptics, triggerGameplayAutosave]);
 
-  // Hint action with server-backed reveal
+  // Hint action with race-safe cell revision check
   const handleHint = useCallback(async () => {
-    if (isCompleted || isPaused) return;
-    if (!isStarted) setIsStarted(true);
+    const isInteractionDisabled =
+      (officialCompletedRef.current && !practiceModeRef.current) || isPausedRef.current || practiceCompleted;
+    if (isInteractionDisabled) return;
+    if (!isStartedRef.current) setIsStarted(true);
 
-    const candidateIndices = cells
+    const currentCells = cellsRef.current;
+    const candidateIndices = currentCells
       .filter((c) => !c.given && c.value === 0)
       .map((c) => c.index);
 
     if (candidateIndices.length === 0) return;
 
+    const selected = selectedIndexRef.current;
     const targetIndex =
-      selectedIndex !== null && candidateIndices.includes(selectedIndex)
-        ? selectedIndex
-        : candidateIndices[0];
+      selected !== null && candidateIndices.includes(selected) ? selected : candidateIndices[0];
+
+    const targetRevision = cellRevisionsRef.current[targetIndex];
 
     let correctNum = 0;
-    if (initialPuzzle.solutionGrid) {
-      correctNum = parseInt(initialPuzzle.solutionGrid[targetIndex], 10);
-    } else {
-      try {
-        const res = await fetch("/api/game/hint", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            puzzleKey: initialPuzzle.puzzleKey,
-            index: targetIndex,
-          }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          correctNum = data.number;
-        }
-      } catch {
-        // Fallback
+    try {
+      const res = await fetch("/api/game/hint", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          puzzleKey: initialPuzzle.puzzleKey,
+          index: targetIndex,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        correctNum = data.number;
       }
+    } catch {
+      // Fallback
     }
 
     if (!correctNum) return;
+
+    // Ensure target cell has not been filled or changed while hint was fetching
+    if (cellRevisionsRef.current[targetIndex] !== targetRevision || cellsRef.current[targetIndex]?.value !== 0) {
+      logSync(`Stale hint response for cell ${targetIndex} discarded.`);
+      return;
+    }
 
     soundEngine.playPencilDigit();
     triggerHaptic("tap", settings.haptics);
@@ -648,53 +1029,53 @@ export function SudokuGame({
     const peerIndices = getPeers(targetIndex);
     const removedPeerNotes: { index: number; notes: number[] }[] = [];
 
-    const nextCells = cells.map((c) => {
-      if (c.index === targetIndex) {
-        return { ...c, value: correctNum, notes: [], isMistake: false };
-      }
-      if (settings.autoRemoveNotes && peerIndices.includes(c.index) && c.notes.includes(correctNum)) {
-        removedPeerNotes.push({ index: c.index, notes: [correctNum] });
-        return { ...c, notes: c.notes.filter((n) => n !== correctNum) };
-      }
-      return c;
-    });
+    cellRevisionsRef.current[targetIndex]++;
+    boardRevisionRef.current++;
+
+    setCells((prev) =>
+      prev.map((c) => {
+        if (c.index === targetIndex) {
+          return { ...c, value: correctNum, notes: [], isMistake: false };
+        }
+        if (settings.autoRemoveNotes && peerIndices.includes(c.index) && c.notes.includes(correctNum)) {
+          removedPeerNotes.push({ index: c.index, notes: [correctNum] });
+          return { ...c, notes: c.notes.filter((n) => n !== correctNum) };
+        }
+        return c;
+      })
+    );
 
     historyRef.current.push({
       index: targetIndex,
       prevValue: 0,
       newValue: correctNum,
-      prevNotes: cells[targetIndex]?.notes || [],
+      prevNotes: cellsRef.current[targetIndex]?.notes || [],
       newNotes: [],
       removedPeerNotes,
       timestamp: Date.now(),
     });
 
     setSelectedIndex(targetIndex);
-    setCells(nextCells);
+    triggerGameplayAutosave();
 
-    const allFilled = nextCells.every((c) => c.value !== 0);
-    if (allFilled) {
-      handleGameComplete(nextCells);
+    // Check completion
+    const latestGrid = cellsRef.current.map((c) => (c.index === targetIndex ? correctNum : c.value)).join("");
+    if (!latestGrid.includes("0") && isGridCompleteAndValid(latestGrid)) {
+      handleGameComplete(cellsRef.current.map((c) => (c.index === targetIndex ? { ...c, value: correctNum } : c)));
     }
   }, [
-    isCompleted,
-    isPaused,
-    isStarted,
-    cells,
-    selectedIndex,
+    practiceCompleted,
     initialPuzzle.puzzleKey,
-    initialPuzzle.solutionGrid,
     settings.haptics,
     settings.autoRemoveNotes,
+    triggerGameplayAutosave,
     handleGameComplete,
   ]);
 
   // Keyboard navigation and shortcuts with e.repeat guard
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (isCompleted) return;
-
-      // Ignore held-down repeated keys
+      if ((officialCompletedRef.current && !practiceModeRef.current) || practiceCompleted) return;
       if (e.repeat) return;
 
       // Digits 1-9
@@ -718,7 +1099,7 @@ export function SudokuGame({
         return;
       }
 
-      // Undo (Ctrl+Z or Cmd+Z)
+      // Undo
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
         e.preventDefault();
         handleUndo();
@@ -757,24 +1138,120 @@ export function SudokuGame({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isCompleted, handleSetNumber, handleErase, handleUndo, handleHint]);
+  }, [practiceCompleted, handleSetNumber, handleErase, handleUndo, handleHint]);
 
   const handleCellClick = useCallback(
     (index: number) => {
-      if (isCompleted || isPaused) return;
-      if (!isStarted) setIsStarted(true);
+      if ((officialCompletedRef.current && !practiceModeRef.current) || isPausedRef.current || practiceCompleted) {
+        return;
+      }
+      if (!isStartedRef.current) setIsStarted(true);
       setSelectedIndex((prev) => (prev === index ? null : index));
       triggerHaptic("tap", settings.haptics);
     },
-    [isCompleted, isPaused, isStarted, settings.haptics]
+    [practiceCompleted, settings.haptics]
   );
 
   const handleTogglePause = useCallback(() => {
-    if (isCompleted) return;
+    if ((officialCompletedRef.current && !practiceModeRef.current) || practiceCompleted) return;
     setIsPaused((prev) => !prev);
-    if (!isStarted) setIsStarted(true);
-  }, [isCompleted, isStarted]);
+    if (!isStartedRef.current) setIsStarted(true);
+  }, [practiceCompleted]);
 
+  // Loading state fallback while initial sync is executing
+  if (loadingProgress && cells.length === 0) {
+    return (
+      <div style={{ textAlign: "center", padding: "48px 16px", color: "var(--ink-secondary)" }}>
+        <span className="font-doodle" style={{ fontSize: "15px" }}>opening notebook...</span>
+      </div>
+    );
+  }
+
+  // 1. OFFICIAL COMPLETED STATE (NOT IN PRACTICE MODE)
+  if (officialCompleted && !practiceMode) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          width: "100%",
+          maxWidth: "440px",
+          margin: "0 auto",
+          padding: "8px 12px 24px",
+          boxSizing: "border-box",
+        }}
+      >
+        <GameHeaderInfo
+          difficulty={completionResult?.difficulty || initialPuzzle.difficulty}
+          dateStr={completionResult?.dateStr || dateStr || initialPuzzle.date}
+          elapsedSeconds={completionResult?.elapsedSeconds || elapsedSeconds}
+          mistakes={completionResult?.mistakes || mistakes}
+          isPaused={false}
+          onTogglePause={() => {}}
+          streak={userStreak}
+          syncStatus={syncStatus}
+        />
+
+        <CompletionSheet
+          difficulty={completionResult?.difficulty || initialPuzzle.difficulty}
+          elapsedSeconds={completionResult?.elapsedSeconds || elapsedSeconds}
+          xpBreakdown={xpBreakdown || completionResult?.xpBreakdown}
+          xpAwarded={completionResult?.xpAwarded ?? 0}
+          mistakes={completionResult?.mistakes ?? mistakes}
+          hintsUsed={completionResult?.hintsUsed ?? hintsUsed}
+          isDaily={isDaily}
+          dateStr={completionResult?.dateStr || dateStr || initialPuzzle.date}
+          rank={completionResult?.rank}
+          onReplayPractice={handleStartPracticeReplay}
+          onPlayAnother={onPlayAnother}
+        />
+      </div>
+    );
+  }
+
+  // 2. PRACTICE COMPLETED STATE
+  if (practiceMode && practiceCompleted) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          width: "100%",
+          maxWidth: "440px",
+          margin: "0 auto",
+          padding: "8px 12px 24px",
+          boxSizing: "border-box",
+        }}
+      >
+        <GameHeaderInfo
+          title="daily sudoku (practice)"
+          difficulty={initialPuzzle.difficulty}
+          dateStr={dateStr || initialPuzzle.date}
+          elapsedSeconds={elapsedSeconds}
+          mistakes={mistakes}
+          isPaused={false}
+          onTogglePause={() => {}}
+          streak={userStreak}
+        />
+
+        <CompletionSheet
+          difficulty={initialPuzzle.difficulty}
+          elapsedSeconds={elapsedSeconds}
+          mistakes={mistakes}
+          hintsUsed={hintsUsed}
+          isDaily={isDaily}
+          dateStr={dateStr || initialPuzzle.date}
+          isPractice={true}
+          onReplayPractice={handleStartPracticeReplay}
+          onPlayAnother={() => setPracticeMode(false)}
+        />
+      </div>
+    );
+  }
+
+  // 3. ACTIVE INTERACTIVE GAMEPLAY (NEW, IN-PROGRESS, OR PRACTICE REPLAY)
   return (
     <div
       style={{
@@ -789,12 +1266,15 @@ export function SudokuGame({
       }}
     >
       <GameHeaderInfo
+        title={practiceMode ? "daily sudoku (practice)" : undefined}
         difficulty={initialPuzzle.difficulty}
         dateStr={dateStr || initialPuzzle.date}
         elapsedSeconds={elapsedSeconds}
         mistakes={mistakes}
         isPaused={isPaused}
         onTogglePause={handleTogglePause}
+        streak={userStreak}
+        syncStatus={practiceMode ? null : syncStatus}
       />
 
       <SudokuBoard
@@ -815,19 +1295,10 @@ export function SudokuGame({
         completedNumbers={completedNumbers}
         numberCounts={numberCounts}
         canUndo={historyRef.current.length > 0}
-        disabled={isCompleted || isPaused}
+        disabled={isPaused}
       />
-
-      {isCompleted && xpBreakdown && (
-        <CompletionSheet
-          difficulty={initialPuzzle.difficulty}
-          elapsedSeconds={elapsedSeconds}
-          xpBreakdown={xpBreakdown}
-          isDaily={isDaily}
-          dateStr={dateStr || initialPuzzle.date}
-          onPlayAnother={onPlayAnother}
-        />
-      )}
     </div>
   );
 }
+
+

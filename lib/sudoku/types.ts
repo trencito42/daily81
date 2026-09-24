@@ -1,15 +1,22 @@
 export type Difficulty = "easy" | "medium" | "hard" | "expert";
 
-export interface SudokuPuzzle {
+export interface PublicSudokuPuzzle {
   id?: string;
   puzzleKey: string;
   date?: string | null;
   difficulty: Difficulty;
   initialGrid: string; // 81 characters '0'-'9', '0' for empty
-  solutionGrid: string; // 81 characters '1'-'9'
-  seed: string;
+  seed?: string;
   givensCount: number;
 }
+
+export interface ServerSudokuPuzzle extends PublicSudokuPuzzle {
+  seed: string;
+  solutionGrid: string; // 81 characters '1'-'9' (SERVER ONLY)
+}
+
+// Client-safe default alias
+export type SudokuPuzzle = PublicSudokuPuzzle;
 
 export interface CellPosition {
   row: number; // 0-8
@@ -39,7 +46,7 @@ export interface SudokuMove {
 }
 
 export interface SudokuGameState {
-  puzzle: SudokuPuzzle;
+  puzzle: PublicSudokuPuzzle;
   cells: CellState[];
   selectedIndex: number | null;
   pencilMode: boolean;
@@ -68,6 +75,20 @@ export interface XPBreakdown {
   prevXP: number;
   newXP: number;
   levelUp: boolean;
+}
+
+export interface CompletionResult {
+  elapsedSeconds: number;
+  mistakes: number;
+  hintsUsed: number;
+  xpAwarded: number;
+  completedAt?: string | Date | null;
+  leaderboardEligible?: boolean;
+  dateStr?: string | null;
+  difficulty: Difficulty;
+  isDaily: boolean;
+  rank?: number | null;
+  xpBreakdown?: XPBreakdown | null;
 }
 
 export interface UserStats {

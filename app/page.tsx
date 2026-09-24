@@ -1,5 +1,4 @@
-import { generateDailySudoku } from "@/lib/sudoku/generator";
-import { getTodayDateString } from "@/lib/daily/streak";
+import { getOrCreateDailyPuzzle } from "@/lib/puzzles/puzzleService";
 import { SudokuGame } from "@/components/game/SudokuGame";
 import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
@@ -7,8 +6,7 @@ import { prisma } from "@/lib/db/prisma";
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const todayStr = getTodayDateString();
-  const puzzle = generateDailySudoku(todayStr, "hard");
+  const { publicPuzzle } = await getOrCreateDailyPuzzle();
 
   let userStreak = 0;
   try {
@@ -27,9 +25,9 @@ export default async function HomePage() {
   return (
     <div style={{ width: "100%", flex: 1, display: "flex", flexDirection: "column" }}>
       <SudokuGame
-        initialPuzzle={puzzle}
+        initialPuzzle={publicPuzzle}
         isDaily={true}
-        dateStr={todayStr}
+        dateStr={publicPuzzle.date}
         userStreak={userStreak}
       />
     </div>

@@ -265,16 +265,58 @@ export async function respondChallenge(challengeId: string, userId: string, acti
   return { success: true, action: "accepted" };
 }
 
+export async function startChallengeRound(params: {
+  challengeId: string;
+  userId: string;
+  roundNumber: number;
+}) {
+  const { challengeId, userId, roundNumber } = params;
+
+  const challenge = await prisma.challenge.findUnique({
+    where: { id: challengeId },
+  });
+
+  if (!challenge || (challenge.status !== "active" && challenge.status !== "pending")) {
+    return { success: false, error: "Challenge is not active." };
+  }
+
+  if (challenge.challengerId !== userId && challenge.opponentId !== userId) {
+    return { success: false, error: "Unauthorized." };
+  }
+
+  const attempt = await prisma.challengeAttempt.upsert({
+    where: {
+      challenge_user_round_unique: {
+        challengeId,
+        userId,
+        roundNumber,
+      },
+    },
+    update: {
+      startedAt: new Date(),
+    },
+    create: {
+      challengeId,
+      userId,
+      roundNumber,
+      startedAt: new Date(),
+      isCompleted: false,
+    },
+  });
+
+  return { success: true, startedAt: attempt.startedAt };
+}
+
 export async function submitChallengeRoundAttempt(params: {
   challengeId: string;
   userId: string;
   roundNumber: number;
   finalGrid: string;
-  elapsedSeconds: number;
-  mistakes: number;
-  hintsUsed: number;
+  elapsedSeconds?: number;
+  mistakes?: number;
+  hintsUsed?: number;
 }) {
-  const { challengeId, userId, roundNumber, finalGrid, elapsedSeconds, mistakes, hintsUsed } = params;
+  const { challengeId, userId, roundNumber, finalGrid, mistakes = 0, hintsUsed = 0 } = params;
 
   const challenge = await prisma.challenge.findUnique({
     where: { id: challengeId },
@@ -302,8 +344,22 @@ export async function submitChallengeRoundAttempt(params: {
     return { success: false, error: "Submitted solution is invalid." };
   }
 
-  // 2. Anti-cheat check: elapsed time sanity
-  const isFlagged = elapsedSeconds < 15;
+  const existingAttempt = await prisma.challengeAttempt.findUnique({
+    where: {
+      challenge_user_round_unique: {
+        challengeId,
+        userId,
+        roundNumber,
+      },
+    },
+  });
+
+  const now = new Date();
+  const startTime = existingAttempt?.startedAt || now;
+  const authoritativeElapsed = Math.max(1, Math.round((now.getTime() - startTime.getTime()) / 1000));
+
+  // Anti-cheat flag: solve faster than 15s is flagged
+  const isFlagged = authoritativeElapsed < 15;
 
   // 3. Upsert attempt record
   await prisma.challengeAttempt.upsert({
@@ -315,8 +371,8 @@ export async function submitChallengeRoundAttempt(params: {
       },
     },
     update: {
-      completedAt: new Date(),
-      elapsedSeconds: Math.max(1, elapsedSeconds),
+      completedAt: now,
+      elapsedSeconds: authoritativeElapsed,
       mistakes: Math.max(0, mistakes),
       hintsUsed: Math.max(0, hintsUsed),
       finalGrid,
@@ -327,9 +383,9 @@ export async function submitChallengeRoundAttempt(params: {
       challengeId,
       userId,
       roundNumber,
-      startedAt: new Date(Date.now() - elapsedSeconds * 1000),
-      completedAt: new Date(),
-      elapsedSeconds: Math.max(1, elapsedSeconds),
+      startedAt: startTime,
+      completedAt: now,
+      elapsedSeconds: authoritativeElapsed,
       mistakes: Math.max(0, mistakes),
       hintsUsed: Math.max(0, hintsUsed),
       finalGrid,
@@ -366,6 +422,9 @@ export async function evaluateChallengeCompletion(challengeId: string) {
   const u1Attempts = challenge.attempts.filter((a) => a.userId === u1 && !a.isFlagged);
   const u2Attempts = challenge.attempts.filter((a) => a.userId === u2 && !a.isFlagged);
 
+  const u1Flagged = challenge.attempts.some((a) => a.userId === u1 && a.isFlagged);
+  const u2Flagged = challenge.attempts.some((a) => a.userId === u2 && a.isFlagged);
+
   const mode = challenge.mode as ChallengeMode;
   let isComplete = false;
   let winnerId: string | null = null;
@@ -389,6 +448,12 @@ export async function evaluateChallengeCompletion(challengeId: string) {
       } else {
         isTie = true;
       }
+    } else if (u1Flagged && a2) {
+      isComplete = true;
+      winnerId = u2;
+    } else if (u2Flagged && a1) {
+      isComplete = true;
+      winnerId = u1;
     }
   }
 
@@ -436,7 +501,7 @@ export async function evaluateChallengeCompletion(challengeId: string) {
     }
   }
 
-  // 4. TIME ATTACK (Derive count strictly from completed DB rounds)
+  // 4. TIME ATTACK (Derive count strictly from completed valid DB rounds)
   if (mode === "time_attack") {
     const u1SolvedCount = u1Attempts.filter((a) => a.roundNumber >= 1).length;
     const u2SolvedCount = u2Attempts.filter((a) => a.roundNumber >= 1).length;

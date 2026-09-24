@@ -105,9 +105,24 @@ export async function POST(req: Request, { params }: RouteParams) {
       return NextResponse.json({ success: true, action: res.action });
     }
 
-    // 2. Submit Round Attempt
+    // 2. Start Round (records server start time)
+    if (action === "start_round") {
+      const { roundNumber } = body;
+      const { startChallengeRound } = await import("@/lib/challenges/challengeEngine");
+      const res = await startChallengeRound({
+        challengeId,
+        userId: session.id,
+        roundNumber: Number(roundNumber) || 1,
+      });
+      if (!res.success) {
+        return NextResponse.json({ error: res.error }, { status: 400 });
+      }
+      return NextResponse.json({ success: true, startedAt: res.startedAt });
+    }
+
+    // 3. Submit Round Attempt
     if (action === "submit_attempt") {
-      const { roundNumber, finalGrid, elapsedSeconds, mistakes, hintsUsed } = body;
+      const { roundNumber, finalGrid, mistakes, hintsUsed } = body;
 
       if (!finalGrid || typeof roundNumber !== "number") {
         return NextResponse.json({ error: "Invalid attempt data" }, { status: 400 });
@@ -118,7 +133,6 @@ export async function POST(req: Request, { params }: RouteParams) {
         userId: session.id,
         roundNumber,
         finalGrid,
-        elapsedSeconds: Number(elapsedSeconds) || 0,
         mistakes: Number(mistakes) || 0,
         hintsUsed: Number(hintsUsed) || 0,
       });
@@ -134,9 +148,21 @@ export async function POST(req: Request, { params }: RouteParams) {
       });
     }
 
-    // 3. Time Attack Finish
+    // 4. Time Attack Finish (Derives solve count strictly from valid DB rounds)
     if (action === "time_attack_finish") {
-      const { puzzlesSolved, totalElapsedSeconds, totalMistakes } = body;
+      const completedRounds = await prisma.challengeAttempt.findMany({
+        where: {
+          challengeId,
+          userId: session.id,
+          roundNumber: { gte: 1 },
+          isCompleted: true,
+          isFlagged: false,
+        },
+      });
+
+      const solvedCount = completedRounds.length;
+      const totalElapsed = completedRounds.reduce((acc, r) => acc + r.elapsedSeconds, 0);
+      const totalMistakes = completedRounds.reduce((acc, r) => acc + r.mistakes, 0);
 
       await prisma.challengeAttempt.upsert({
         where: {
@@ -148,9 +174,9 @@ export async function POST(req: Request, { params }: RouteParams) {
         },
         update: {
           isCompleted: true,
-          puzzlesSolved: Number(puzzlesSolved) || 0,
-          elapsedSeconds: Number(totalElapsedSeconds) || 0,
-          mistakes: Number(totalMistakes) || 0,
+          puzzlesSolved: solvedCount,
+          elapsedSeconds: totalElapsed,
+          mistakes: totalMistakes,
           completedAt: new Date(),
         },
         create: {
@@ -158,15 +184,15 @@ export async function POST(req: Request, { params }: RouteParams) {
           userId: session.id,
           roundNumber: 0,
           isCompleted: true,
-          puzzlesSolved: Number(puzzlesSolved) || 0,
-          elapsedSeconds: Number(totalElapsedSeconds) || 0,
-          mistakes: Number(totalMistakes) || 0,
+          puzzlesSolved: solvedCount,
+          elapsedSeconds: totalElapsed,
+          mistakes: totalMistakes,
           completedAt: new Date(),
         },
       });
 
       const evalResult = await evaluateChallengeCompletion(challengeId);
-      return NextResponse.json({ success: true, isComplete: evalResult.isComplete, winnerId: evalResult.winnerId });
+      return NextResponse.json({ success: true, isComplete: evalResult.isComplete, winnerId: evalResult.winnerId, puzzlesSolved: solvedCount });
     }
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });

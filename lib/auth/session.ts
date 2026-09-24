@@ -1,9 +1,18 @@
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 
-const SECRET_KEY = process.env.NEXTAUTH_SECRET || "daily81-default-dev-secret-key-32-chars-long";
-const key = new TextEncoder().encode(SECRET_KEY);
 const COOKIE_NAME = "daily81_session";
+
+function getSecretKey(): Uint8Array {
+  const secret = process.env.NEXTAUTH_SECRET;
+  if (!secret) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("NEXTAUTH_SECRET is missing in production environment");
+    }
+    return new TextEncoder().encode("daily81-default-dev-secret-key-32-chars-long");
+  }
+  return new TextEncoder().encode(secret);
+}
 
 export interface SessionUser {
   id: string;
@@ -17,6 +26,7 @@ export interface SessionUser {
 }
 
 export async function createSessionToken(user: SessionUser): Promise<string> {
+  const key = getSecretKey();
   return new SignJWT({
     id: user.id,
     email: user.email,
@@ -30,6 +40,7 @@ export async function createSessionToken(user: SessionUser): Promise<string> {
 
 export async function verifySessionToken(token: string): Promise<{ id: string; email: string; displayName: string } | null> {
   try {
+    const key = getSecretKey();
     const { payload } = await jwtVerify(token, key, {
       algorithms: ["HS256"],
     });
@@ -43,7 +54,7 @@ export async function setSessionCookie(token: string) {
   const cookieStore = await cookies();
   cookieStore.set(COOKIE_NAME, token, {
     httpOnly: true,
-    secure: false, // Allows seamless reverse proxying and local dev; CloudPanel Nginx handles HTTPS SSL termination
+    secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
     maxAge: 30 * 24 * 60 * 60, // 30 days
@@ -73,4 +84,3 @@ export async function getSession(request?: Request): Promise<{ id: string; email
     return null;
   }
 }
-
