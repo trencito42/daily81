@@ -1,9 +1,14 @@
 "use client";
 
 import React, { useState } from "react";
-import Link from "next/link";
 import { XPBreakdown, Difficulty } from "@/lib/sudoku/types";
 import { XPBar } from "../doodle/XPBar";
+import { DoodlePanel } from "../doodle/DoodlePanel";
+import { DoodleBadge } from "../doodle/DoodleBadge";
+import { DoodleButton } from "../doodle/DoodleButton";
+import { DoodleDivider } from "../doodle/DoodleDivider";
+import { DoodleIcon } from "../doodle/DoodleIcon";
+import { DoodleUnderline } from "../doodle/DoodleUnderline";
 
 interface CompletionSheetProps {
   difficulty: Difficulty;
@@ -60,31 +65,34 @@ export function CompletionSheet({
   };
 
   return (
-    <div
+    <DoodlePanel
+      variant="default"
+      tape="yellow"
+      padding="lg"
+      className="animate-pop"
       style={{
         width: "100%",
-        maxWidth: "440px",
+        maxWidth: "460px",
         margin: "16px auto",
-        padding: "24px 20px",
-        backgroundColor: "var(--bg-paper)",
-        border: "2px solid var(--ink-primary)",
-        borderRadius: "255px 15px 225px 15px/15px 225px 15px 255px",
         textAlign: "center",
-        boxShadow: "3px 4px 0 var(--border-shadow, rgba(0, 0, 0, 0.08))",
       }}
-      className="animate-pop"
     >
+      {/* Trophy / Check Graphic */}
+      <div style={{ display: "flex", justifyContent: "center", marginBottom: "8px", color: "var(--ink-primary)" }}>
+        <DoodleIcon name="trophy" size={36} />
+      </div>
+
       {/* Title */}
       <h2
-        className="font-doodle"
         style={{
-          fontSize: "24px",
-          fontWeight: 400,
+          fontSize: "22px",
+          fontWeight: 600,
           color: "var(--ink-primary)",
           marginBottom: "4px",
+          lineHeight: 1.2,
         }}
       >
-        {isPractice ? "practice solved ✓" : isDaily ? "today's sudoku ✓" : "problem solved"}
+        {isPractice ? "practice solved" : isDaily ? "today's sudoku solved" : "puzzle solved"}
       </h2>
 
       {dateStr && (
@@ -92,8 +100,7 @@ export function CompletionSheet({
           style={{
             fontSize: "13px",
             color: "var(--ink-secondary)",
-            marginBottom: "12px",
-            fontFamily: "var(--font-mono)",
+            marginBottom: "10px",
           }}
         >
           {dateStr} · {difficulty}
@@ -103,11 +110,11 @@ export function CompletionSheet({
       {/* Time */}
       <div
         style={{
-          fontSize: "30px",
-          fontWeight: 700,
-          fontFamily: "var(--font-mono)",
+          fontSize: "32px",
+          fontWeight: 600,
           color: "var(--ink-primary)",
-          marginBottom: "14px",
+          marginBottom: "12px",
+          fontVariantNumeric: "tabular-nums",
         }}
       >
         {timeFormatted}
@@ -120,48 +127,48 @@ export function CompletionSheet({
           style={{
             width: "100%",
             maxWidth: "320px",
-            margin: "0 auto 18px",
+            margin: "0 auto 14px",
             fontSize: "14px",
           }}
         >
-          <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", color: "var(--ink-secondary)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", color: "var(--ink-secondary)" }}>
             <span style={{ textTransform: "capitalize" }}>{difficulty}</span>
-            <span style={{ fontFamily: "var(--font-mono)" }}>+{xpBreakdown.baseXP} xp</span>
+            <span style={{ fontVariantNumeric: "tabular-nums" }}>+{xpBreakdown.baseXP} xp</span>
           </div>
 
           {xpBreakdown.noMistakesBonus > 0 && (
-            <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", color: "var(--ink-secondary)" }}>
-              <span>no mistakes</span>
-              <span style={{ fontFamily: "var(--font-mono)" }}>+{xpBreakdown.noMistakesBonus} xp</span>
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", color: "var(--ink-secondary)" }}>
+              <span>no mistakes bonus</span>
+              <span style={{ fontVariantNumeric: "tabular-nums" }}>+{xpBreakdown.noMistakesBonus} xp</span>
             </div>
           )}
 
           {xpBreakdown.noHintsBonus > 0 && (
-            <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", color: "var(--ink-secondary)" }}>
-              <span>no hints</span>
-              <span style={{ fontFamily: "var(--font-mono)" }}>+{xpBreakdown.noHintsBonus} xp</span>
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", color: "var(--ink-secondary)" }}>
+              <span>no hints bonus</span>
+              <span style={{ fontVariantNumeric: "tabular-nums" }}>+{xpBreakdown.noHintsBonus} xp</span>
             </div>
           )}
 
           {xpBreakdown.dailyBonus > 0 && (
-            <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", color: "var(--ink-secondary)" }}>
-              <span>daily puzzle</span>
-              <span style={{ fontFamily: "var(--font-mono)" }}>+{xpBreakdown.dailyBonus} xp</span>
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", color: "var(--ink-secondary)" }}>
+              <span>daily puzzle bonus</span>
+              <span style={{ fontVariantNumeric: "tabular-nums" }}>+{xpBreakdown.dailyBonus} xp</span>
             </div>
           )}
 
           {xpBreakdown.speedBonus > 0 && (
-            <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", color: "var(--ink-secondary)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", color: "var(--ink-secondary)" }}>
               <span>speed bonus</span>
-              <span style={{ fontFamily: "var(--font-mono)" }}>+{xpBreakdown.speedBonus} xp</span>
+              <span style={{ fontVariantNumeric: "tabular-nums" }}>+{xpBreakdown.speedBonus} xp</span>
             </div>
           )}
 
-          <div style={{ height: "1.5px", backgroundColor: "var(--ink-primary)", margin: "8px 0" }} />
+          <DoodleDivider spacing="sm" />
 
-          <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontWeight: 700, fontSize: "15px" }}>
-            <span>total</span>
-            <span style={{ fontFamily: "var(--font-mono)" }}>+{xpBreakdown.totalXP} xp</span>
+          <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontWeight: 700, fontSize: "15px", color: "var(--ink-primary)" }}>
+            <span>total earned</span>
+            <span style={{ fontVariantNumeric: "tabular-nums" }}>+{xpBreakdown.totalXP} xp</span>
           </div>
         </div>
       ) : (
@@ -170,26 +177,26 @@ export function CompletionSheet({
           style={{
             width: "100%",
             maxWidth: "280px",
-            margin: "0 auto 16px",
+            margin: "0 auto 14px",
             fontSize: "14px",
             display: "flex",
             flexDirection: "column",
-            gap: "5px",
+            gap: "4px",
             color: "var(--ink-secondary)",
           }}
         >
           <div style={{ display: "flex", justifyContent: "space-between" }}>
             <span>mistakes</span>
-            <span style={{ fontFamily: "var(--font-mono)", color: "var(--ink-primary)" }}>{mistakes}</span>
+            <span style={{ fontVariantNumeric: "tabular-nums", color: "var(--ink-primary)" }}>{mistakes}</span>
           </div>
           <div style={{ display: "flex", justifyContent: "space-between" }}>
             <span>hints used</span>
-            <span style={{ fontFamily: "var(--font-mono)", color: "var(--ink-primary)" }}>{hintsUsed}</span>
+            <span style={{ fontVariantNumeric: "tabular-nums", color: "var(--ink-primary)" }}>{hintsUsed}</span>
           </div>
           {!isPractice && totalXP > 0 && (
             <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 600, color: "var(--ink-primary)" }}>
               <span>xp earned</span>
-              <span style={{ fontFamily: "var(--font-mono)" }}>+{totalXP} xp</span>
+              <span style={{ fontVariantNumeric: "tabular-nums" }}>+{totalXP} xp</span>
             </div>
           )}
           {isPractice && (
@@ -202,39 +209,28 @@ export function CompletionSheet({
 
       {/* Rank Badge if available */}
       {rank && rank > 0 && !isPractice && (
-        <div style={{ marginBottom: "16px" }}>
-          <span
-            style={{
-              display: "inline-block",
-              padding: "4px 12px",
-              backgroundColor: "var(--highlight-cell, #f5f0e6)",
-              border: "1px dashed var(--ink-secondary)",
-              borderRadius: "255px 12px 225px 12px/12px 225px 12px 255px",
-              fontFamily: "var(--font-mono)",
-              fontSize: "13px",
-              fontWeight: 600,
-              color: "var(--ink-primary)",
-            }}
-          >
+        <div style={{ marginBottom: "14px" }}>
+          <DoodleBadge variant="highlight" size="md" icon="trophy">
             #{rank} today
-          </span>
+          </DoodleBadge>
         </div>
       )}
 
       {/* Level Progress */}
       {xpBreakdown && (
-        <div style={{ marginBottom: "20px" }}>
+        <div style={{ marginBottom: "18px" }}>
           {xpBreakdown.levelUp && (
             <div
-              className="font-doodle animate-pop"
               style={{
-                fontSize: "16px",
+                fontSize: "15px",
                 color: "var(--ink-primary)",
                 marginBottom: "8px",
+                position: "relative",
                 display: "inline-block",
               }}
             >
-              <span className="doodle-underline">level up! reached level {xpBreakdown.newLevel}</span>
+              <span>level up! reached level {xpBreakdown.newLevel}</span>
+              <DoodleUnderline />
             </div>
           )}
           <XPBar xp={xpBreakdown.newXP} />
@@ -242,43 +238,49 @@ export function CompletionSheet({
       )}
 
       {/* Action Buttons */}
-      <div style={{ display: "flex", justifyContent: "center", gap: "10px", flexWrap: "wrap", marginTop: "12px" }}>
+      <div style={{ display: "flex", justifyContent: "center", gap: "8px", flexWrap: "wrap", marginTop: "12px" }}>
         {isDaily && (
-          <Link
+          <DoodleButton
+            size="sm"
+            variant="default"
             href={`/leaderboard?type=daily${dateStr ? `&date=${encodeURIComponent(dateStr)}` : ""}`}
-            className="doodle-button"
-            style={{ textDecoration: "none", fontSize: "13px" }}
+            icon="leaderboard"
           >
-            view leaderboard
-          </Link>
+            leaderboard
+          </DoodleButton>
         )}
 
         {isDaily && onReplayPractice && (
-          <button
-            type="button"
+          <DoodleButton
+            size="sm"
+            variant="primary"
             onClick={onReplayPractice}
-            className="doodle-button active"
-            style={{ fontSize: "13px" }}
+            icon="refresh"
           >
-            replay for practice
-          </button>
+            replay
+          </DoodleButton>
         )}
 
         {!isDaily && onPlayAnother && (
-          <button
-            type="button"
+          <DoodleButton
+            size="sm"
+            variant="primary"
             onClick={onPlayAnother}
-            className="doodle-button active"
-            style={{ fontSize: "13px" }}
+            icon="play"
           >
             play another
-          </button>
+          </DoodleButton>
         )}
 
-        <button type="button" onClick={handleShare} className="doodle-button" style={{ fontSize: "13px" }}>
+        <DoodleButton
+          size="sm"
+          variant="secondary"
+          onClick={handleShare}
+          icon={copied ? "check" : undefined}
+        >
           {copied ? "copied!" : "share result"}
-        </button>
+        </DoodleButton>
       </div>
-    </div>
+    </DoodlePanel>
   );
 }

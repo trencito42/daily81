@@ -3,6 +3,9 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Difficulty, PublicSudokuPuzzle } from "@/lib/sudoku/types";
 import { SudokuGame } from "@/components/game/SudokuGame";
+import { DoodleTabs } from "@/components/doodle/DoodleTabs";
+import { DoodleNotice } from "@/components/doodle/DoodleNotice";
+import { DoodleButton } from "@/components/doodle/DoodleButton";
 
 interface ActiveSessionItem {
   sessionId: string;
@@ -66,7 +69,12 @@ export default function PlayPage() {
     loadPuzzle("medium");
   }, [loadPuzzle]);
 
-  const difficulties: Difficulty[] = ["easy", "medium", "hard", "expert"];
+  const difficultyTabs = [
+    { id: "easy", label: "easy" },
+    { id: "medium", label: "medium" },
+    { id: "hard", label: "hard" },
+    { id: "expert", label: "expert" },
+  ];
 
   const formatTime = (secs: number) => {
     const m = Math.floor(secs / 60);
@@ -80,79 +88,60 @@ export default function PlayPage() {
       <div
         style={{
           width: "100%",
-          maxWidth: "520px",
+          maxWidth: "var(--page-reading, 520px)",
           margin: "0 auto",
-          padding: "4px 16px 0",
+          padding: "6px 16px 0",
           display: "flex",
           justifyContent: "center",
           alignItems: "center",
-          gap: "8px",
-          flexWrap: "wrap",
         }}
       >
-        {difficulties.map((diff) => {
-          const isActive = difficulty === diff;
-          return (
-            <button
-              key={diff}
-              type="button"
-              onClick={() => {
-                setActiveSession(null);
-                loadPuzzle(diff, true);
-              }}
-              className={`doodle-button doodle-button-sm ${isActive ? "active" : ""}`}
-              style={{
-                textTransform: "lowercase",
-                fontSize: "12px",
-                padding: "3px 10px",
-              }}
-            >
-              {diff}
-            </button>
-          );
-        })}
+        <DoodleTabs
+          tabs={difficultyTabs}
+          activeTab={difficulty}
+          size="sm"
+          onChange={(id) => {
+            setActiveSession(null);
+            loadPuzzle(id as Difficulty, true);
+          }}
+        />
       </div>
 
-      {/* Active Session Resume Banner */}
+      {/* Active Session Resume Notice */}
       {activeSession && puzzle && activeSession.puzzleKey !== puzzle.puzzleKey && (
         <div
           style={{
-            maxWidth: "440px",
+            maxWidth: "var(--page-game, 500px)",
             margin: "8px auto 0",
-            padding: "6px 14px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            background: "var(--highlight-cell)",
-            border: "1px dashed var(--ink-secondary)",
-            borderRadius: "255px 15px 225px 15px/15px 225px 15px 255px",
-            fontSize: "12px",
-            fontFamily: "var(--font-doodle)",
-            width: "90%",
+            padding: "0 12px",
+            width: "100%",
             boxSizing: "border-box",
           }}
         >
-          <span>
-            unfinished {activeSession.puzzle.difficulty} ({formatTime(activeSession.elapsedSeconds)})
-          </span>
-          <button
-            type="button"
-            onClick={() => {
-              setDifficulty(activeSession.puzzle.difficulty);
-              setPuzzle(activeSession.puzzle);
-              setActiveSession(null);
-            }}
-            className="doodle-button doodle-button-sm"
-            style={{ fontSize: "11px", padding: "2px 8px" }}
-          >
-            resume →
-          </button>
+          <DoodleNotice variant="warning">
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", gap: "8px" }}>
+              <span>
+                unfinished {activeSession.puzzle.difficulty} ({formatTime(activeSession.elapsedSeconds)})
+              </span>
+              <DoodleButton
+                size="sm"
+                variant="primary"
+                onClick={() => {
+                  setDifficulty(activeSession.puzzle.difficulty);
+                  setPuzzle(activeSession.puzzle);
+                  setActiveSession(null);
+                }}
+              >
+                resume
+              </DoodleButton>
+            </div>
+          </DoodleNotice>
         </div>
       )}
 
       {loading && !puzzle ? (
         <div style={{ textAlign: "center", padding: "40px", color: "var(--ink-secondary)" }}>
-          <span className="font-doodle">sharpening pencil...</span>
+          <span className="font-doodle" style={{ fontSize: "16px" }}>sharpening pencil...</span>
         </div>
       ) : puzzle ? (
         <SudokuGame
@@ -165,4 +154,3 @@ export default function PlayPage() {
     </div>
   );
 }
-

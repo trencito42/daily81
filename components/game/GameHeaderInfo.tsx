@@ -3,7 +3,7 @@
 import React from "react";
 import { Difficulty } from "@/lib/sudoku/types";
 import { formatNotebookDate } from "@/lib/daily/streak";
-import { PauseIcon, PlayIcon } from "../doodle/Icons";
+import { DoodleIcon } from "../doodle/DoodleIcon";
 
 interface GameHeaderInfoProps {
   title?: string;
@@ -40,54 +40,51 @@ export function GameHeaderInfo({
     <div
       style={{
         width: "100%",
-        maxWidth: "480px",
+        maxWidth: "var(--page-game, 500px)",
         margin: "0 auto 10px",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         textAlign: "center",
+        fontFamily: "var(--font-doodle)",
       }}
     >
-      {/* Title & Date */}
+      {/* Title */}
       <h1
-        className="font-doodle"
         style={{
-          fontSize: "22px",
-          fontWeight: 400,
+          fontSize: "24px",
+          fontWeight: 600,
           color: "var(--ink-primary)",
           letterSpacing: "-0.2px",
           marginBottom: "2px",
+          lineHeight: 1.2,
         }}
       >
         {title || (dateStr ? "daily sudoku" : "sudoku")}
       </h1>
 
+      {/* Date & Metadata */}
       <div
         style={{
           display: "flex",
           alignItems: "center",
-          gap: "8px",
-          fontSize: "13px",
+          gap: "6px",
+          fontSize: "14px",
           color: "var(--ink-secondary)",
-          marginBottom: "6px",
+          marginBottom: "8px",
         }}
       >
         {dateStr && <span>{formatNotebookDate(dateStr)}</span>}
-        {dateStr && <span>•</span>}
-        <span
-          className="font-doodle"
-          style={{
-            fontSize: "13px",
-            color: "var(--ink-primary)",
-          }}
-        >
+        {dateStr && <span>·</span>}
+        <span style={{ color: "var(--ink-primary)", fontWeight: 500 }}>
           {difficulty}
         </span>
         {streak !== undefined && streak > 0 && (
           <>
-            <span>•</span>
-            <span className="font-doodle" style={{ color: "var(--ink-primary)" }}>
-              {streak}d streak
+            <span>·</span>
+            <span style={{ color: "var(--ink-primary)", display: "inline-flex", alignItems: "center", gap: "3px" }}>
+              <DoodleIcon name="streak" size={13} />
+              {streak} day streak
             </span>
           </>
         )}
@@ -100,8 +97,8 @@ export function GameHeaderInfo({
           justifyContent: "space-between",
           alignItems: "center",
           width: "100%",
-          padding: "0 2px",
-          fontSize: "13px",
+          padding: "0 4px",
+          fontSize: "14px",
           color: "var(--ink-secondary)",
         }}
       >
@@ -109,17 +106,26 @@ export function GameHeaderInfo({
           <button
             type="button"
             onClick={onTogglePause}
-            className="doodle-button doodle-button-sm doodle-button-ghost"
             style={{
-              padding: "2px 8px",
-              fontFamily: "var(--font-mono)",
-              fontSize: "13px",
-              borderRadius: "255px 6px 225px 6px/6px 225px 6px 255px",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              background: "none",
+              border: "1px dashed var(--border-subtle)",
+              borderRadius: "4px",
+              padding: "3px 8px",
+              fontFamily: "var(--font-doodle)",
+              fontSize: "14px",
+              color: "var(--ink-primary)",
+              cursor: "pointer",
+              userSelect: "none",
+              fontVariantNumeric: "tabular-nums",
             }}
             aria-label={isPaused ? "Resume game" : "Pause game"}
           >
-            {isPaused ? <PlayIcon /> : <PauseIcon />}
+            <DoodleIcon name={isPaused ? "play" : "clock"} size={14} />
             <span>{timeFormatted}</span>
+            {isPaused && <span style={{ fontSize: "12px", color: "var(--ink-secondary)" }}>(paused)</span>}
           </button>
         ) : (
           <div />
@@ -131,25 +137,24 @@ export function GameHeaderInfo({
               display: "flex",
               alignItems: "center",
               gap: "8px",
-              fontSize: "13px",
+              fontSize: "14px",
             }}
           >
             {syncStatus && (
               <span
                 style={{
-                  fontSize: "11px",
+                  fontSize: "12px",
                   color: syncStatus === "offline" ? "var(--ink-muted)" : "var(--ink-secondary)",
-                  opacity: 0.8,
-                  fontFamily: "var(--font-doodle)",
+                  opacity: 0.85,
                 }}
               >
                 {syncStatus === "saving" ? "syncing..." : syncStatus === "saved" ? "synced" : "offline"}
               </span>
             )}
             <span
-              className="font-doodle"
               style={{
                 color: mistakes > 0 ? "var(--error-ink)" : "var(--ink-secondary)",
+                fontWeight: mistakes > 0 ? 600 : 400,
               }}
             >
               mistakes: {mistakes}

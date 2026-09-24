@@ -58,7 +58,7 @@ export default async function RootLayout({
 
   return (
     <html lang="en">
-      <body style={{ minHeight: "100dvh", display: "flex", flexDirection: "column" }}>
+      <body className="doodle" style={{ minHeight: "100dvh", display: "flex", flexDirection: "column" }}>
         <Header user={user} />
         <main style={{ flex: 1, display: "flex", flexDirection: "column", width: "100%" }}>
           {children}

@@ -3,6 +3,13 @@
 import React, { useState, useEffect, use } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { DoodlePanel } from "@/components/doodle/DoodlePanel";
+import { DoodleButton } from "@/components/doodle/DoodleButton";
+import { DoodleBadge } from "@/components/doodle/DoodleBadge";
+import { DoodleNotice } from "@/components/doodle/DoodleNotice";
+import { DoodleEmptyState } from "@/components/doodle/DoodleEmptyState";
+import { DoodleDivider } from "@/components/doodle/DoodleDivider";
+import { DoodleIcon } from "@/components/doodle/DoodleIcon";
 
 interface ProfileData {
   user: {
@@ -112,6 +119,8 @@ export default function UserProfilePage({ params }: { params: Promise<{ username
       if (res.ok) {
         setActionFeedback("Friend removed.");
         fetchProfile();
+      } else {
+        setActionFeedback("Failed to remove friend.");
       }
     } catch {
       setActionFeedback("Failed to remove friend.");
@@ -142,8 +151,8 @@ export default function UserProfilePage({ params }: { params: Promise<{ username
 
   if (loading) {
     return (
-      <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--ink-secondary)" }}>
-        <span className="font-doodle">opening player notebook...</span>
+      <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--ink-secondary)", fontFamily: "var(--font-doodle)" }}>
+        <span>opening player notebook...</span>
       </div>
     );
   }
@@ -153,18 +162,18 @@ export default function UserProfilePage({ params }: { params: Promise<{ username
       <div
         style={{
           width: "100%",
-          maxWidth: "460px",
+          maxWidth: "var(--page-reading, 520px)",
           margin: "40px auto",
-          padding: "24px 20px",
-          textAlign: "center",
-          border: "1px dashed var(--border-subtle)",
-          borderRadius: "10px",
+          padding: "0 16px",
+          boxSizing: "border-box",
         }}
       >
-        <p style={{ color: "var(--ink-secondary)", marginBottom: "16px" }}>{error || "Player not found."}</p>
-        <Link href="/friends" className="doodle-button doodle-button-sm">
-          ← back to friends
-        </Link>
+        <DoodleEmptyState
+          icon="user"
+          title={error || "Player not found"}
+          actionLabel="← back to friends"
+          actionHref="/friends"
+        />
       </div>
     );
   }
@@ -176,9 +185,11 @@ export default function UserProfilePage({ params }: { params: Promise<{ username
     <div
       style={{
         width: "100%",
-        maxWidth: "480px",
+        maxWidth: "var(--page-reading, 520px)",
         margin: "12px auto",
         padding: "16px 20px 48px",
+        boxSizing: "border-box",
+        fontFamily: "var(--font-doodle)",
       }}
     >
       {/* Top breadcrumb */}
@@ -196,65 +207,45 @@ export default function UserProfilePage({ params }: { params: Promise<{ username
       </div>
 
       {actionFeedback && (
-        <div
-          style={{
-            padding: "8px 12px",
-            backgroundColor: "var(--highlight-cell)",
-            borderRadius: "6px",
-            fontSize: "13px",
-            marginBottom: "16px",
-          }}
-        >
-          {actionFeedback}
+        <div style={{ marginBottom: "14px" }}>
+          <DoodleNotice variant="info" onClose={() => setActionFeedback(null)}>
+            {actionFeedback}
+          </DoodleNotice>
         </div>
       )}
 
       {/* Main Profile Header */}
-      <div
-        style={{
-          border: "1.5px solid var(--ink-primary)",
-          borderRadius: "255px 12px 225px 12px/12px 225px 12px 255px",
-          padding: "20px",
-          backgroundColor: "var(--bg-paper)",
-          marginBottom: "20px",
-        }}
+      <DoodlePanel
+        variant="default"
+        padding="md"
+        style={{ marginBottom: "20px" }}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
             <h1
-              className="font-doodle"
               style={{
-                fontSize: "26px",
+                fontSize: "24px",
                 fontWeight: 600,
                 color: "var(--ink-primary)",
                 lineHeight: 1.1,
-                marginBottom: "4px",
+                marginBottom: "2px",
               }}
             >
               {user.displayName}
             </h1>
-            <div style={{ fontSize: "13px", color: "var(--ink-secondary)", fontFamily: "var(--font-mono)" }}>
+            <div style={{ fontSize: "14px", color: "var(--ink-secondary)" }}>
               @{user.username}
             </div>
           </div>
 
-          <div
-            style={{
-              padding: "4px 10px",
-              border: "1px solid var(--ink-primary)",
-              borderRadius: "255px 6px 225px 6px/6px 225px 6px 255px",
-              fontWeight: 700,
-              fontSize: "14px",
-              fontFamily: "var(--font-mono)",
-            }}
-          >
+          <DoodleBadge variant="highlight" size="md">
             Lv. {user.level}
-          </div>
+          </DoodleBadge>
         </div>
 
         {/* Level progress info */}
-        <div style={{ marginTop: "16px", fontSize: "13px", color: "var(--ink-secondary)" }}>
-          <span style={{ fontFamily: "var(--font-mono)", fontWeight: 600, color: "var(--ink-primary)" }}>
+        <div style={{ marginTop: "14px", fontSize: "13px", color: "var(--ink-secondary)" }}>
+          <span style={{ fontWeight: 600, color: "var(--ink-primary)", fontVariantNumeric: "tabular-nums" }}>
             {user.xp} XP
           </span>{" "}
           earned · member since {new Date(user.createdAt).getFullYear()}
@@ -263,238 +254,132 @@ export default function UserProfilePage({ params }: { params: Promise<{ username
         {/* Action buttons */}
         {!relationship.isSelf && (
           <div style={{ display: "flex", gap: "8px", marginTop: "16px", flexWrap: "wrap" }}>
-            <Link
+            <DoodleButton
+              size="sm"
+              variant="primary"
               href={`/challenges?opponent=${encodeURIComponent(user.username)}`}
-              className="doodle-button doodle-button-sm active"
-              style={{ textDecoration: "none", fontSize: "13px", padding: "4px 14px" }}
+              icon="swords"
             >
               challenge
-            </Link>
+            </DoodleButton>
 
             {relationship.isFriend ? (
-              <button
-                type="button"
+              <DoodleButton
+                size="sm"
+                variant="secondary"
                 onClick={handleRemoveFriend}
-                className="doodle-button doodle-button-sm"
-                style={{ fontSize: "13px", padding: "4px 12px" }}
+                icon="check"
               >
-                friends ✓
-              </button>
+                friends
+              </DoodleButton>
             ) : relationship.pendingRequest === "outgoing" ? (
-              <button
-                type="button"
+              <DoodleButton
+                size="sm"
+                variant="default"
                 disabled
-                className="doodle-button doodle-button-sm"
-                style={{ fontSize: "13px", padding: "4px 12px", opacity: 0.7 }}
               >
                 request pending
-              </button>
+              </DoodleButton>
             ) : relationship.pendingRequest === "incoming" ? (
-              <Link
+              <DoodleButton
+                size="sm"
+                variant="primary"
                 href="/friends"
-                className="doodle-button doodle-button-sm active"
-                style={{ textDecoration: "none", fontSize: "13px", padding: "4px 12px" }}
               >
                 respond to request
-              </Link>
+              </DoodleButton>
             ) : (
-              <button
-                type="button"
+              <DoodleButton
+                size="sm"
+                variant="default"
                 onClick={handleSendFriendRequest}
-                className="doodle-button doodle-button-sm"
-                style={{ fontSize: "13px", padding: "4px 12px" }}
               >
                 + add friend
-              </button>
+              </DoodleButton>
             )}
 
-            <button
-              type="button"
+            <DoodleButton
+              size="sm"
+              variant="ghost"
               onClick={handleBlockUser}
-              style={{
-                background: "none",
-                border: "none",
-                color: "var(--ink-secondary)",
-                fontSize: "12px",
-                cursor: "pointer",
-                padding: "4px 8px",
-                marginLeft: "auto",
-              }}
+              title="Block user"
             >
               block
-            </button>
+            </DoodleButton>
           </div>
         )}
-      </div>
+      </DoodlePanel>
 
-      {/* Head-to-Head rivalry stats (if viewer is signed in and not self) */}
-      {!relationship.isSelf && h2h && h2h.totalMatches > 0 && (
-        <div
-          style={{
-            border: "1px solid var(--border-subtle)",
-            borderRadius: "255px 10px 225px 10px/10px 225px 10px 255px",
-            padding: "16px",
-            marginBottom: "20px",
-            backgroundColor: "var(--highlight-cell)",
-          }}
-        >
+      {/* Head to Head record if available */}
+      {h2h && h2h.totalMatches > 0 && (
+        <div style={{ marginBottom: "20px" }}>
+          <h2 style={{ fontSize: "17px", fontWeight: 600, marginBottom: "8px" }}>
+            head-to-head record
+          </h2>
           <div
             style={{
-              fontSize: "12px",
-              fontWeight: 600,
-              textTransform: "uppercase",
-              letterSpacing: "0.5px",
-              color: "var(--ink-secondary)",
-              marginBottom: "8px",
-            }}
-          >
-            head-to-head rivalry
-          </div>
-
-          <div
-            style={{
+              padding: "10px 14px",
+              backgroundColor: "var(--bg-paper-alt)",
+              borderStyle: "solid",
+              borderWidth: "10px",
+              borderImage: "url(/doodle/button.svg) 10 10 10 10 stretch stretch",
               display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              fontSize: "18px",
-              fontFamily: "var(--font-mono)",
-              fontWeight: 700,
-              margin: "6px 0 10px",
+              justifyContent: "space-around",
+              textAlign: "center",
+              fontVariantNumeric: "tabular-nums",
             }}
           >
-            <span>you {h2h.user1Wins}</span>
-            <span style={{ color: "var(--ink-secondary)", fontWeight: 400, fontSize: "14px" }}>
-              {h2h.totalMatches} matches {h2h.ties > 0 && `(${h2h.ties} ties)`}
-            </span>
-            <span>{user.displayName} {h2h.user2Wins}</span>
-          </div>
-
-          {(h2h.avgTime1 > 0 || h2h.avgTime2 > 0) && (
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                fontSize: "12px",
-                color: "var(--ink-secondary)",
-                fontFamily: "var(--font-mono)",
-                borderTop: "1px dashed var(--border-subtle)",
-                paddingTop: "8px",
-              }}
-            >
-              <span>avg time: {formatTime(h2h.avgTime1)}</span>
-              <span>avg time: {formatTime(h2h.avgTime2)}</span>
+            <div>
+              <div style={{ fontSize: "18px", fontWeight: 700, color: "var(--success-ink)" }}>{h2h.user1Wins}</div>
+              <div style={{ fontSize: "12px", color: "var(--ink-secondary)" }}>your wins</div>
             </div>
-          )}
+            <div>
+              <div style={{ fontSize: "18px", fontWeight: 700, color: "var(--ink-secondary)" }}>{h2h.ties}</div>
+              <div style={{ fontSize: "12px", color: "var(--ink-secondary)" }}>ties</div>
+            </div>
+            <div>
+              <div style={{ fontSize: "18px", fontWeight: 700, color: "var(--error-ink)" }}>{h2h.user2Wins}</div>
+              <div style={{ fontSize: "12px", color: "var(--ink-secondary)" }}>{user.displayName} wins</div>
+            </div>
+          </div>
         </div>
       )}
 
-      {/* Ranks & Streaks */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: "10px",
-          marginBottom: "20px",
-        }}
-      >
-        <div
-          style={{
-            border: "1px solid var(--border-subtle)",
-            borderRadius: "8px",
-            padding: "12px",
-            backgroundColor: "var(--bg-paper)",
-          }}
-        >
-          <div style={{ fontSize: "12px", color: "var(--ink-secondary)" }}>current streak</div>
-          <div style={{ fontSize: "20px", fontFamily: "var(--font-mono)", fontWeight: 700, marginTop: "2px" }}>
-            {user.currentStreak} <span style={{ fontSize: "12px", fontWeight: 400 }}>days</span>
-          </div>
-          <div style={{ fontSize: "11px", color: "var(--ink-secondary)", marginTop: "4px" }}>
-            longest: {user.longestStreak} days
-          </div>
-        </div>
-
-        <div
-          style={{
-            border: "1px solid var(--border-subtle)",
-            borderRadius: "8px",
-            padding: "12px",
-            backgroundColor: "var(--bg-paper)",
-          }}
-        >
-          <div style={{ fontSize: "12px", color: "var(--ink-secondary)" }}>rankings</div>
-          <div style={{ fontSize: "14px", fontFamily: "var(--font-mono)", fontWeight: 600, marginTop: "4px" }}>
-            xp: #{user.xpRank}
-          </div>
-          <div style={{ fontSize: "14px", fontFamily: "var(--font-mono)", fontWeight: 600, marginTop: "2px" }}>
-            streak: #{user.streakRank}
-          </div>
-        </div>
-      </div>
-
-      {/* Solving Stats */}
+      {/* Public Stats or Private notice */}
       {stats ? (
-        <div
-          style={{
-            border: "1px solid var(--border-subtle)",
-            borderRadius: "255px 10px 225px 10px/10px 225px 10px 255px",
-            padding: "16px",
-            backgroundColor: "var(--bg-paper)",
-          }}
-        >
-          <h2
-            style={{
-              fontSize: "13px",
-              fontWeight: 600,
-              textTransform: "uppercase",
-              letterSpacing: "0.5px",
-              color: "var(--ink-secondary)",
-              marginBottom: "12px",
-            }}
-          >
-            solving records
+        <div>
+          <h2 style={{ fontSize: "17px", fontWeight: 600, marginBottom: "8px" }}>
+            solving statistics
           </h2>
-
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px", fontSize: "14px" }}>
-            <span style={{ color: "var(--ink-secondary)" }}>total solved</span>
-            <span style={{ fontFamily: "var(--font-mono)", fontWeight: 600 }}>{stats.totalSolved}</span>
-          </div>
-
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px", fontSize: "14px" }}>
-            <span style={{ color: "var(--ink-secondary)" }}>daily puzzles</span>
-            <span style={{ fontFamily: "var(--font-mono)", fontWeight: 600 }}>{stats.dailyPuzzlesCompleted}</span>
-          </div>
-
-          {stats.bestTimeSeconds > 0 && (
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px", fontSize: "14px" }}>
-              <span style={{ color: "var(--ink-secondary)" }}>best solve time</span>
-              <span style={{ fontFamily: "var(--font-mono)", fontWeight: 600 }}>
-                {formatTime(stats.bestTimeSeconds)}
+          <div style={{ display: "flex", flexDirection: "column", fontVariantNumeric: "tabular-nums" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px dashed var(--border-subtle)", fontSize: "14px" }}>
+              <span>Σ solved puzzles</span>
+              <span style={{ fontWeight: 600 }}>{stats.totalSolved}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px dashed var(--border-subtle)", fontSize: "14px" }}>
+              <span>μ average solve time</span>
+              <span>{formatTime(stats.averageTimeSeconds)}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px dashed var(--border-subtle)", fontSize: "14px" }}>
+              <span>best recorded time</span>
+              <span>{formatTime(stats.bestTimeSeconds)}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px dashed var(--border-subtle)", fontSize: "14px" }}>
+              <span>daily puzzles solved</span>
+              <span>{stats.dailyPuzzlesCompleted}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px dashed var(--border-subtle)", fontSize: "14px" }}>
+              <span>current streak</span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "3px" }}>
+                <DoodleIcon name="streak" size={13} />
+                {user.currentStreak} days
               </span>
             </div>
-          )}
-
-          {stats.averageTimeSeconds > 0 && (
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "14px" }}>
-              <span style={{ color: "var(--ink-secondary)" }}>average time</span>
-              <span style={{ fontFamily: "var(--font-mono)", fontWeight: 600 }}>
-                {formatTime(stats.averageTimeSeconds)}
-              </span>
-            </div>
-          )}
+          </div>
         </div>
       ) : (
-        <div
-          style={{
-            textAlign: "center",
-            padding: "24px 16px",
-            border: "1px dashed var(--border-subtle)",
-            borderRadius: "8px",
-            color: "var(--ink-secondary)",
-            fontSize: "13px",
-          }}
-        >
-          detailed solving statistics are private.
+        <div style={{ padding: "16px 0", textAlign: "center", color: "var(--ink-secondary)", fontSize: "14px", fontStyle: "italic" }}>
+          this player&apos;s stats are private.
         </div>
       )}
     </div>

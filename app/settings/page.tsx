@@ -1,9 +1,11 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { GameSettings } from "@/lib/sudoku/types";
 import { loadSettings, saveSettings } from "@/lib/client/storage";
 import { DoodleCheckbox } from "@/components/doodle/DoodleCheckbox";
+import { DoodleDivider } from "@/components/doodle/DoodleDivider";
+import { DoodleBadge } from "@/components/doodle/DoodleBadge";
 import { soundEngine } from "@/lib/client/audio";
 
 export default function SettingsPage() {
@@ -28,30 +30,32 @@ export default function SettingsPage() {
     <div
       style={{
         width: "100%",
-        maxWidth: "460px",
-        margin: "16px auto",
-        padding: "16px 20px",
+        maxWidth: "var(--page-reading, 520px)",
+        margin: "12px auto",
+        padding: "16px 20px 48px",
+        boxSizing: "border-box",
+        fontFamily: "var(--font-doodle)",
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "16px" }}>
         <h1
-          className="font-doodle"
           style={{
-            fontSize: "22px",
-            fontWeight: 400,
+            fontSize: "24px",
+            fontWeight: 600,
             color: "var(--ink-primary)",
+            margin: 0,
           }}
         >
           settings
         </h1>
         {savedNotice && (
-          <span style={{ fontSize: "12px", fontFamily: "var(--font-doodle)", color: "var(--success-ink)" }}>
-            saved ✓
-          </span>
+          <DoodleBadge variant="success" size="sm">
+            saved
+          </DoodleBadge>
         )}
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
         <DoodleCheckbox
           label="pencil sounds"
           description="quiet paper & pencil scratch feedback"
@@ -66,7 +70,7 @@ export default function SettingsPage() {
           onChange={(val) => updateSetting("haptics", val)}
         />
 
-        <div className="notebook-rule" />
+        <DoodleDivider spacing="sm" />
 
         <DoodleCheckbox
           label="auto-remove pencil notes"
@@ -89,7 +93,7 @@ export default function SettingsPage() {
           onChange={(val) => updateSetting("highlightRelated", val)}
         />
 
-        <div className="notebook-rule" />
+        <DoodleDivider spacing="sm" />
 
         <DoodleCheckbox
           label="show timer"

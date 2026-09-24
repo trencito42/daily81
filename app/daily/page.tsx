@@ -3,7 +3,7 @@ import { getTodayDateString, isFutureDate } from "@/lib/daily/streak";
 import { SudokuGame } from "@/components/game/SudokuGame";
 import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
-import Link from "next/link";
+import { DoodleEmptyState } from "@/components/doodle/DoodleEmptyState";
 
 export const dynamic = "force-dynamic";
 
@@ -22,24 +22,19 @@ export default async function DailyPage({ searchParams }: DailyPageProps) {
       <div
         style={{
           width: "100%",
-          maxWidth: "440px",
+          maxWidth: "var(--page-reading, 520px)",
           margin: "40px auto",
-          padding: "24px 20px",
-          textAlign: "center",
-          border: "1.5px solid var(--ink-primary)",
-          borderRadius: "255px 12px 225px 12px/12px 225px 12px 255px",
-          backgroundColor: "var(--bg-paper)",
+          padding: "0 16px",
+          boxSizing: "border-box",
         }}
       >
-        <h1 className="font-doodle" style={{ fontSize: "22px", marginBottom: "12px" }}>
-          puzzle not available yet
-        </h1>
-        <p style={{ color: "var(--ink-secondary)", fontSize: "14px", lineHeight: "1.6", marginBottom: "20px" }}>
-          The daily sudoku for {dateStr} belongs to the future and cannot be opened early.
-        </p>
-        <Link href="/daily" className="doodle-button doodle-button-sm active" style={{ textDecoration: "none" }}>
-          today&apos;s puzzle →
-        </Link>
+        <DoodleEmptyState
+          icon="calendar"
+          title="puzzle not available yet"
+          description={`The daily sudoku for ${dateStr} belongs to the future and cannot be opened early.`}
+          actionLabel="today's puzzle →"
+          actionHref="/daily"
+        />
       </div>
     );
   }

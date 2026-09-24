@@ -1,51 +1,77 @@
 import React from "react";
-import { CheckIcon } from "./Icons";
+import { DoodleIcon } from "./DoodleIcon";
 
-interface DoodleCheckboxProps {
+export interface DoodleCheckboxProps {
   label: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
   description?: string;
+  disabled?: boolean;
 }
 
-export function DoodleCheckbox({ label, checked, onChange, description }: DoodleCheckboxProps) {
+export function DoodleCheckbox({
+  label,
+  checked,
+  onChange,
+  description,
+  disabled = false,
+}: DoodleCheckboxProps) {
   return (
     <label
       style={{
         display: "flex",
         alignItems: "flex-start",
         gap: "12px",
-        cursor: "pointer",
+        cursor: disabled ? "not-allowed" : "pointer",
         userSelect: "none",
-        padding: "8px 0",
+        padding: "6px 0",
+        opacity: disabled ? 0.5 : 1,
       }}
       onClick={(e) => {
+        if (disabled) return;
         e.preventDefault();
         onChange(!checked);
       }}
     >
       <div
         style={{
-          width: "20px",
-          height: "20px",
-          marginTop: "2px",
+          width: "22px",
+          height: "22px",
+          marginTop: "1px",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          border: "1.5px solid var(--ink-primary)",
-          borderRadius: "255px 4px 225px 4px/4px 225px 4px 255px",
-          backgroundColor: checked ? "var(--ink-primary)" : "transparent",
-          color: "var(--bg-paper)",
-          transition: "all 0.12s ease",
+          borderStyle: "solid",
+          borderWidth: "6px",
+          borderImage: "url(/doodle/checkbox.svg) 6 6 6 6 stretch stretch",
+          backgroundColor: checked ? "var(--highlight-cell)" : "var(--bg-paper)",
+          color: "var(--ink-primary)",
           flexShrink: 0,
+          boxSizing: "border-box",
         }}
       >
-        {checked && <CheckIcon className="w-3.5 h-3.5" />}
+        {checked && <DoodleIcon name="check" size={14} />}
       </div>
       <div>
-        <div style={{ fontSize: "14px", fontWeight: 500, color: "var(--ink-primary)" }}>{label}</div>
+        <div
+          style={{
+            fontFamily: "var(--font-doodle)",
+            fontSize: "15px",
+            fontWeight: 500,
+            color: "var(--ink-primary)",
+          }}
+        >
+          {label}
+        </div>
         {description && (
-          <div style={{ fontSize: "12px", color: "var(--ink-secondary)", marginTop: "2px" }}>
+          <div
+            style={{
+              fontFamily: "var(--font-doodle)",
+              fontSize: "13px",
+              color: "var(--ink-secondary)",
+              marginTop: "2px",
+            }}
+          >
             {description}
           </div>
         )}

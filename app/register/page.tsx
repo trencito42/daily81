@@ -4,6 +4,9 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { loadGuestProfile } from "@/lib/client/storage";
+import { DoodleInput } from "@/components/doodle/DoodleInput";
+import { DoodleButton } from "@/components/doodle/DoodleButton";
+import { DoodleNotice } from "@/components/doodle/DoodleNotice";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -51,100 +54,83 @@ export default function RegisterPage() {
     <div
       style={{
         width: "100%",
-        maxWidth: "380px",
-        margin: "32px auto",
-        padding: "24px 20px",
+        maxWidth: "var(--page-reading, 520px)",
+        margin: "24px auto",
+        padding: "16px 20px 48px",
+        boxSizing: "border-box",
+        fontFamily: "var(--font-doodle)",
       }}
     >
       <h1
-        className="font-doodle"
         style={{
           fontSize: "24px",
-          fontWeight: 400,
+          fontWeight: 600,
           color: "var(--ink-primary)",
-          marginBottom: "6px",
+          marginBottom: "4px",
           textAlign: "center",
         }}
       >
         create account
       </h1>
 
-      <p style={{ textAlign: "center", fontSize: "13px", color: "var(--ink-secondary)", marginBottom: "20px" }}>
-        sync your daily puzzles & stats across devices
+      <p style={{ textAlign: "center", fontSize: "14px", color: "var(--ink-secondary)", marginBottom: "20px" }}>
+        sync your daily puzzles & streaks across devices
       </p>
 
       {error && (
-        <div
-          style={{
-            padding: "8px 12px",
-            backgroundColor: "var(--error-bg)",
-            color: "var(--error-ink)",
-            borderRadius: "6px",
-            fontSize: "13px",
-            marginBottom: "16px",
-          }}
-        >
-          {error}
+        <div style={{ marginBottom: "16px" }}>
+          <DoodleNotice variant="error" onClose={() => setError(null)}>
+            {error}
+          </DoodleNotice>
         </div>
       )}
 
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-        <div>
-          <label style={{ display: "block", fontSize: "13px", marginBottom: "4px", color: "var(--ink-secondary)" }}>
-            display name
-          </label>
-          <input
-            type="text"
-            required
-            placeholder="e.g. Steve"
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            className="doodle-input"
-            autoComplete="name"
-          />
-        </div>
+        <DoodleInput
+          label="display name"
+          type="text"
+          required
+          placeholder="e.g. Steve"
+          value={displayName}
+          onChange={(e) => setDisplayName(e.target.value)}
+          autoComplete="name"
+        />
 
-        <div>
-          <label style={{ display: "block", fontSize: "13px", marginBottom: "4px", color: "var(--ink-secondary)" }}>
-            email
-          </label>
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="doodle-input"
-            autoComplete="email"
-          />
-        </div>
+        <DoodleInput
+          label="email"
+          type="email"
+          required
+          placeholder="your.email@example.com"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          autoComplete="email"
+        />
 
-        <div>
-          <label style={{ display: "block", fontSize: "13px", marginBottom: "4px", color: "var(--ink-secondary)" }}>
-            password
-          </label>
-          <input
-            type="password"
-            required
-            minLength={6}
-            placeholder="at least 6 characters"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="doodle-input"
-            autoComplete="new-password"
-          />
-        </div>
+        <DoodleInput
+          label="password"
+          type="password"
+          required
+          minLength={6}
+          placeholder="at least 6 characters"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          autoComplete="new-password"
+        />
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="doodle-button active"
-          style={{ width: "100%", marginTop: "8px", padding: "10px" }}
-        >
-          {loading ? "creating account..." : "create account"}
-        </button>
+        <div style={{ marginTop: "8px" }}>
+          <DoodleButton
+            type="submit"
+            variant="primary"
+            size="lg"
+            fullWidth
+            disabled={loading}
+          >
+            {loading ? "creating account..." : "create account"}
+          </DoodleButton>
+        </div>
       </form>
 
-      <div style={{ textAlign: "center", marginTop: "24px", fontSize: "13px", color: "var(--ink-secondary)" }}>
+      <div style={{ textAlign: "center", marginTop: "24px", fontSize: "14px", color: "var(--ink-secondary)" }}>
         already have an account?{" "}
         <Link href="/login" style={{ color: "var(--ink-primary)", fontWeight: 600, textDecoration: "underline" }}>
           log in

@@ -1,7 +1,8 @@
 "use client";
 
 import React from "react";
-import { PencilIcon, UndoIcon, EraseIcon, HintIcon } from "../doodle/Icons";
+import { DoodleIcon } from "../doodle/DoodleIcon";
+import { DoodleButton } from "../doodle/DoodleButton";
 
 interface NumberPadProps {
   onNumberClick: (num: number) => void;
@@ -28,22 +29,16 @@ export function NumberPad({
   canUndo,
   disabled = false,
 }: NumberPadProps) {
-  // 3 fixed border variants distributed cyclically A B C A B C A B C
-  const variantClasses = [
-    "numpad-btn-var1",
-    "numpad-btn-var2",
-    "numpad-btn-var3",
-  ];
-
   return (
     <div
       style={{
         width: "100%",
-        maxWidth: "480px",
-        margin: "14px auto 0",
+        maxWidth: "var(--page-game, 500px)",
+        margin: "12px auto 0",
         display: "flex",
         flexDirection: "column",
         gap: "10px",
+        fontFamily: "var(--font-doodle)",
       }}
     >
       {/* 1-9 Digits Row */}
@@ -55,24 +50,58 @@ export function NumberPad({
           width: "100%",
         }}
       >
-        {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num, idx) => {
+        {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => {
           const isCompleted = completedNumbers.includes(num);
           const count = numberCounts[num] || 0;
           const remaining = Math.max(0, 9 - count);
-          const variantClass = variantClasses[idx % 3];
 
           return (
             <button
               key={num}
               type="button"
-              disabled={disabled}
-              className={`numpad-btn ${variantClass} ${isCompleted ? "completed" : ""}`}
+              disabled={disabled || isCompleted}
               onClick={() => onNumberClick(num)}
               aria-label={`Enter number ${num}, ${remaining} remaining`}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                height: "48px",
+                width: "100%",
+                backgroundColor: isCompleted ? "var(--bg-paper-alt)" : "var(--bg-paper)",
+                color: isCompleted ? "var(--ink-muted)" : "var(--ink-primary)",
+                borderStyle: "solid",
+                borderWidth: "10px",
+                borderImage: "url(/doodle/button.svg) 10 10 10 10 stretch stretch",
+                fontFamily: "var(--font-doodle)",
+                fontSize: "22px",
+                fontWeight: 600,
+                cursor: disabled || isCompleted ? "default" : "pointer",
+                touchAction: "manipulation",
+                userSelect: "none",
+                position: "relative",
+                padding: 0,
+                opacity: isCompleted ? 0.35 : 1,
+                lineHeight: 1,
+                boxSizing: "border-box",
+              }}
             >
-              <span>{num}</span>
+              <span style={{ textDecoration: isCompleted ? "line-through" : "none" }}>{num}</span>
               {!isCompleted && remaining > 0 && remaining < 9 && (
-                <span className="count-badge">{remaining}</span>
+                <span
+                  style={{
+                    position: "absolute",
+                    bottom: "1px",
+                    right: "3px",
+                    fontSize: "10px",
+                    color: "var(--ink-secondary)",
+                    lineHeight: 1,
+                    fontVariantNumeric: "tabular-nums",
+                  }}
+                >
+                  {remaining}
+                </span>
               )}
             </button>
           );
@@ -82,85 +111,67 @@ export function NumberPad({
       {/* Action Controls Row: Pencil, Undo, Erase, Hint */}
       <div
         style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          gap: "8px",
+          display: "grid",
+          gridTemplateColumns: "repeat(4, 1fr)",
+          gap: "6px",
           width: "100%",
         }}
       >
-        <button
-          type="button"
-          disabled={disabled}
+        <DoodleButton
+          size="sm"
+          variant={pencilMode ? "primary" : "default"}
           onClick={onPencilToggle}
-          className={`doodle-button ${pencilMode ? "active" : ""}`}
-          style={{
-            flex: 1,
-            minHeight: "44px",
-            padding: "8px 6px",
-            fontSize: "13px",
-            borderRadius: "255px 10px 225px 12px/12px 225px 10px 255px",
-          }}
+          disabled={disabled}
           title="Toggle pencil notes mode (Key: M)"
+          style={{ minHeight: "40px", padding: "6px 2px" }}
         >
-          <PencilIcon active={pencilMode} />
-          <span>pencil {pencilMode ? "on" : "off"}</span>
-        </button>
+          <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+            <DoodleIcon name="pencil" size={14} />
+            <span>notes</span>
+          </span>
+        </DoodleButton>
 
-        <button
-          type="button"
-          disabled={disabled || !canUndo}
+        <DoodleButton
+          size="sm"
+          variant="default"
           onClick={onUndo}
-          className="doodle-button"
-          style={{
-            flex: 1,
-            minHeight: "44px",
-            padding: "8px 6px",
-            fontSize: "13px",
-            borderRadius: "12px 255px 10px 225px/225px 12px 255px 10px",
-            opacity: canUndo ? 1 : 0.4,
-          }}
+          disabled={disabled || !canUndo}
           title="Undo last move (Ctrl+Z)"
+          style={{ minHeight: "40px", padding: "6px 2px", opacity: canUndo ? 1 : 0.4 }}
         >
-          <UndoIcon />
-          <span>undo</span>
-        </button>
+          <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+            <DoodleIcon name="undo" size={14} />
+            <span>undo</span>
+          </span>
+        </DoodleButton>
 
-        <button
-          type="button"
-          disabled={disabled}
+        <DoodleButton
+          size="sm"
+          variant="default"
           onClick={onErase}
-          className="doodle-button"
-          style={{
-            flex: 1,
-            minHeight: "44px",
-            padding: "8px 6px",
-            fontSize: "13px",
-            borderRadius: "225px 12px 255px 14px/14px 255px 12px 225px",
-          }}
-          title="Erase cell (Backspace / Delete)"
-        >
-          <EraseIcon />
-          <span>erase</span>
-        </button>
-
-        <button
-          type="button"
           disabled={disabled}
-          onClick={onHint}
-          className="doodle-button"
-          style={{
-            flex: 1,
-            minHeight: "44px",
-            padding: "8px 6px",
-            fontSize: "13px",
-            borderRadius: "10px 255px 12px 225px/225px 10px 255px 12px",
-          }}
-          title="Reveal a hint (reduces XP)"
+          title="Erase cell (Backspace / Delete)"
+          style={{ minHeight: "40px", padding: "6px 2px" }}
         >
-          <HintIcon />
-          <span>hint</span>
-        </button>
+          <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+            <DoodleIcon name="erase" size={14} />
+            <span>erase</span>
+          </span>
+        </DoodleButton>
+
+        <DoodleButton
+          size="sm"
+          variant="default"
+          onClick={onHint}
+          disabled={disabled}
+          title="Reveal a hint (reduces XP)"
+          style={{ minHeight: "40px", padding: "6px 2px" }}
+        >
+          <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+            <DoodleIcon name="hint" size={14} />
+            <span>hint</span>
+          </span>
+        </DoodleButton>
       </div>
     </div>
   );

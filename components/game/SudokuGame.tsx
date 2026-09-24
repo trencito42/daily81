@@ -27,6 +27,9 @@ import { SudokuBoard } from "./SudokuBoard";
 import { NumberPad } from "./NumberPad";
 import { GameHeaderInfo } from "./GameHeaderInfo";
 import { CompletionSheet } from "./CompletionSheet";
+import { DoodlePanel } from "../doodle/DoodlePanel";
+import { DoodleButton } from "../doodle/DoodleButton";
+import { DoodleIcon } from "../doodle/DoodleIcon";
 
 const IS_DEV = process.env.NODE_ENV !== "production";
 
@@ -1259,7 +1262,7 @@ export function SudokuGame({
         flexDirection: "column",
         alignItems: "center",
         width: "100%",
-        maxWidth: "440px",
+        maxWidth: "var(--page-game, 500px)",
         margin: "0 auto",
         padding: "8px 12px 24px",
         boxSizing: "border-box",
@@ -1277,13 +1280,59 @@ export function SudokuGame({
         syncStatus={practiceMode ? null : syncStatus}
       />
 
-      <SudokuBoard
-        cells={cells}
-        selectedIndex={selectedIndex}
-        onSelectCell={handleCellClick}
-        highlightMatching={settings.highlightMatching}
-        highlightRelated={settings.highlightRelated}
-      />
+      <div style={{ position: "relative", width: "100%", maxWidth: "var(--page-game, 500px)" }}>
+        <SudokuBoard
+          cells={cells}
+          selectedIndex={selectedIndex}
+          onSelectCell={handleCellClick}
+          highlightMatching={settings.highlightMatching}
+          highlightRelated={settings.highlightRelated}
+        />
+
+        {isPaused && (
+          <div
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: "100%",
+              height: "100%",
+              zIndex: 20,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: "var(--bg-paper)",
+              padding: "16px",
+              boxSizing: "border-box",
+            }}
+          >
+            <DoodlePanel
+              variant="default"
+              tape="yellow"
+              padding="lg"
+              style={{ textAlign: "center", maxWidth: "290px" }}
+            >
+              <div style={{ display: "flex", justifyContent: "center", marginBottom: "8px", color: "var(--ink-primary)" }}>
+                <DoodleIcon name="pause" size={32} />
+              </div>
+              <div style={{ fontSize: "19px", fontWeight: 600, color: "var(--ink-primary)", marginBottom: "4px" }}>
+                puzzle paused
+              </div>
+              <div style={{ fontSize: "13px", color: "var(--ink-secondary)", marginBottom: "14px", lineHeight: 1.3 }}>
+                grid covered while you take a breather
+              </div>
+              <DoodleButton
+                variant="primary"
+                size="md"
+                onClick={handleTogglePause}
+                icon="play"
+              >
+                resume puzzle
+              </DoodleButton>
+            </DoodlePanel>
+          </div>
+        )}
+      </div>
 
       <NumberPad
         onNumberClick={handleSetNumber}

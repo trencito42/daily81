@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from "react";
 import { UserStats } from "@/lib/sudoku/types";
 import { loadGuestProfile } from "@/lib/client/storage";
+import { DoodleDivider } from "@/components/doodle/DoodleDivider";
+import { DoodleProgress } from "@/components/doodle/DoodleProgress";
 
 export default function StatsPage() {
   const [stats, setStats] = useState<UserStats | null>(null);
@@ -42,8 +44,8 @@ export default function StatsPage() {
 
   if (!stats) {
     return (
-      <div style={{ textAlign: "center", padding: "40px", color: "var(--ink-secondary)" }}>
-        <span className="font-doodle">fetching your numbers...</span>
+      <div style={{ textAlign: "center", padding: "40px", color: "var(--ink-secondary)", fontFamily: "var(--font-doodle)" }}>
+        <span style={{ fontSize: "15px" }}>fetching your numbers...</span>
       </div>
     );
   }
@@ -60,18 +62,20 @@ export default function StatsPage() {
     <div
       style={{
         width: "100%",
-        maxWidth: "460px",
+        maxWidth: "var(--page-reading, 520px)",
         margin: "12px auto",
-        padding: "16px 20px",
+        padding: "16px 20px 48px",
+        boxSizing: "border-box",
+        fontFamily: "var(--font-doodle)",
       }}
     >
       <h1
-        className="font-doodle"
         style={{
-          fontSize: "22px",
-          fontWeight: 400,
+          fontSize: "24px",
+          fontWeight: 600,
           color: "var(--ink-primary)",
           marginBottom: "16px",
+          textAlign: "center",
         }}
       >
         your numbers
@@ -80,90 +84,80 @@ export default function StatsPage() {
       {/* Main mathematical stats table */}
       <div
         style={{
-          borderBottom: "1px solid var(--ink-primary)",
-          paddingBottom: "16px",
-          marginBottom: "24px",
+          display: "flex",
+          flexDirection: "column",
+          gap: "2px",
+          marginBottom: "16px",
         }}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", fontSize: "15px" }}>
-          <span><span style={{ fontFamily: "var(--font-mono)", fontWeight: 600 }}>Σ</span> solved</span>
-          <span style={{ fontFamily: "var(--font-mono)", fontWeight: 600 }}>{stats.totalSolved}</span>
+        <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px dashed var(--border-subtle)", fontSize: "15px" }}>
+          <span>Σ solved</span>
+          <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>{stats.totalSolved}</span>
         </div>
 
-        <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", fontSize: "15px" }}>
-          <span><span style={{ fontFamily: "var(--font-mono)", fontWeight: 600 }}>μ</span> time</span>
-          <span style={{ fontFamily: "var(--font-mono)" }}>{formatTime(stats.averageTimeSeconds)}</span>
+        <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px dashed var(--border-subtle)", fontSize: "15px" }}>
+          <span>μ time</span>
+          <span style={{ fontVariantNumeric: "tabular-nums" }}>{formatTime(stats.averageTimeSeconds)}</span>
         </div>
 
-        <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", fontSize: "15px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px dashed var(--border-subtle)", fontSize: "15px" }}>
           <span>best time</span>
-          <span style={{ fontFamily: "var(--font-mono)" }}>{formatTime(stats.bestTimeSeconds)}</span>
+          <span style={{ fontVariantNumeric: "tabular-nums" }}>{formatTime(stats.bestTimeSeconds)}</span>
         </div>
 
-        <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", fontSize: "15px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px dashed var(--border-subtle)", fontSize: "15px" }}>
           <span>accuracy</span>
-          <span style={{ fontFamily: "var(--font-mono)" }}>{stats.accuracyRate}%</span>
+          <span style={{ fontVariantNumeric: "tabular-nums" }}>{stats.accuracyRate}%</span>
         </div>
 
-        <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", fontSize: "15px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px dashed var(--border-subtle)", fontSize: "15px" }}>
           <span>current streak</span>
-          <span style={{ fontFamily: "var(--font-mono)", fontWeight: 600 }}>{stats.currentStreak} {stats.currentStreak === 1 ? "day" : "days"}</span>
+          <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>{stats.currentStreak} {stats.currentStreak === 1 ? "day" : "days"}</span>
         </div>
 
-        <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", fontSize: "15px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px dashed var(--border-subtle)", fontSize: "15px" }}>
           <span>longest streak</span>
-          <span style={{ fontFamily: "var(--font-mono)" }}>{stats.longestStreak} days</span>
+          <span style={{ fontVariantNumeric: "tabular-nums" }}>{stats.longestStreak} days</span>
         </div>
 
-        <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", fontSize: "15px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px dashed var(--border-subtle)", fontSize: "15px" }}>
           <span>daily completed</span>
-          <span style={{ fontFamily: "var(--font-mono)" }}>{stats.dailyPuzzlesCompleted}</span>
+          <span style={{ fontVariantNumeric: "tabular-nums" }}>{stats.dailyPuzzlesCompleted}</span>
         </div>
       </div>
 
+      <DoodleDivider spacing="md" />
+
       {/* Difficulty Breakdown */}
       <h2
-        className="font-doodle"
         style={{
           fontSize: "18px",
-          fontWeight: 400,
+          fontWeight: 600,
           color: "var(--ink-primary)",
-          marginBottom: "12px",
+          marginBottom: "14px",
         }}
       >
         difficulty breakdown
       </h2>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
         {(["easy", "medium", "hard", "expert"] as const).map((diff) => {
           const count = stats.difficultyCounts[diff] || 0;
-          const percentage = Math.round((count / maxDifficultyCount) * 100);
 
           return (
-            <div key={diff} style={{ display: "flex", alignItems: "center", gap: "12px", fontSize: "14px" }}>
-              <span style={{ width: "60px", textTransform: "lowercase", color: "var(--ink-secondary)" }}>
+            <div key={diff} style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <span style={{ width: "65px", textTransform: "lowercase", color: "var(--ink-secondary)", fontSize: "14px" }}>
                 {diff}
               </span>
-              <div
-                style={{
-                  flex: 1,
-                  height: "8px",
-                  border: "1px solid var(--ink-primary)",
-                  borderRadius: "255px 4px 225px 4px/4px 225px 4px 255px",
-                  backgroundColor: "var(--bg-paper)",
-                  overflow: "hidden",
-                }}
-              >
-                <div
-                  style={{
-                    width: `${count > 0 ? percentage : 0}%`,
-                    height: "100%",
-                    backgroundColor: "var(--ink-primary)",
-                    transition: "width 0.4s ease",
-                  }}
+              <div style={{ flex: 1 }}>
+                <DoodleProgress
+                  value={count}
+                  max={maxDifficultyCount}
+                  size="sm"
+                  variant="ink"
                 />
               </div>
-              <span style={{ width: "32px", textAlign: "right", fontFamily: "var(--font-mono)" }}>
+              <span style={{ width: "32px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontSize: "14px" }}>
                 {count}
               </span>
             </div>

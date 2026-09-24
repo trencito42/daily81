@@ -3,6 +3,9 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { DoodleInput } from "@/components/doodle/DoodleInput";
+import { DoodleButton } from "@/components/doodle/DoodleButton";
+import { DoodleNotice } from "@/components/doodle/DoodleNotice";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -42,16 +45,17 @@ export default function LoginPage() {
     <div
       style={{
         width: "100%",
-        maxWidth: "380px",
-        margin: "32px auto",
-        padding: "24px 20px",
+        maxWidth: "var(--page-reading, 520px)",
+        margin: "24px auto",
+        padding: "16px 20px 48px",
+        boxSizing: "border-box",
+        fontFamily: "var(--font-doodle)",
       }}
     >
       <h1
-        className="font-doodle"
         style={{
           fontSize: "24px",
-          fontWeight: 400,
+          fontWeight: 600,
           color: "var(--ink-primary)",
           marginBottom: "20px",
           textAlign: "center",
@@ -61,61 +65,48 @@ export default function LoginPage() {
       </h1>
 
       {error && (
-        <div
-          style={{
-            padding: "8px 12px",
-            backgroundColor: "var(--error-bg)",
-            color: "var(--error-ink)",
-            borderRadius: "6px",
-            fontSize: "13px",
-            marginBottom: "16px",
-            fontFamily: "var(--font-sans)",
-          }}
-        >
-          {error}
+        <div style={{ marginBottom: "16px" }}>
+          <DoodleNotice variant="error" onClose={() => setError(null)}>
+            {error}
+          </DoodleNotice>
         </div>
       )}
 
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-        <div>
-          <label style={{ display: "block", fontSize: "13px", marginBottom: "4px", color: "var(--ink-secondary)" }}>
-            email
-          </label>
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="doodle-input"
-            autoComplete="email"
-          />
-        </div>
+        <DoodleInput
+          label="email"
+          type="email"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          autoComplete="email"
+          placeholder="your.email@example.com"
+        />
 
-        <div>
-          <label style={{ display: "block", fontSize: "13px", marginBottom: "4px", color: "var(--ink-secondary)" }}>
-            password
-          </label>
-          <input
-            type="password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="doodle-input"
-            autoComplete="current-password"
-          />
-        </div>
+        <DoodleInput
+          label="password"
+          type="password"
+          required
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          autoComplete="current-password"
+          placeholder="••••••••"
+        />
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="doodle-button active"
-          style={{ width: "100%", marginTop: "8px", padding: "10px" }}
-        >
-          {loading ? "signing in..." : "sign in"}
-        </button>
+        <div style={{ marginTop: "8px" }}>
+          <DoodleButton
+            type="submit"
+            variant="primary"
+            size="lg"
+            fullWidth
+            disabled={loading}
+          >
+            {loading ? "signing in..." : "sign in"}
+          </DoodleButton>
+        </div>
       </form>
 
-      <div style={{ textAlign: "center", marginTop: "24px", fontSize: "13px", color: "var(--ink-secondary)" }}>
+      <div style={{ textAlign: "center", marginTop: "24px", fontSize: "14px", color: "var(--ink-secondary)" }}>
         no account yet?{" "}
         <Link href="/register" style={{ color: "var(--ink-primary)", fontWeight: 600, textDecoration: "underline" }}>
           create one

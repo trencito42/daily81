@@ -5,6 +5,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { XPBar } from "@/components/doodle/XPBar";
 import { loadGuestProfile } from "@/lib/client/storage";
+import { DoodleButton } from "@/components/doodle/DoodleButton";
+import { DoodleBadge } from "@/components/doodle/DoodleBadge";
+import { DoodleDivider } from "@/components/doodle/DoodleDivider";
+import { DoodleIcon } from "@/components/doodle/DoodleIcon";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -61,112 +65,114 @@ export default function ProfilePage() {
     <div
       style={{
         width: "100%",
-        maxWidth: "440px",
-        margin: "16px auto",
-        padding: "20px",
+        maxWidth: "var(--page-reading, 520px)",
+        margin: "12px auto",
+        padding: "16px 20px 48px",
         textAlign: "center",
+        boxSizing: "border-box",
+        fontFamily: "var(--font-doodle)",
       }}
     >
       <h1
-        className="font-doodle"
         style={{
           fontSize: "24px",
-          fontWeight: 400,
+          fontWeight: 600,
           color: "var(--ink-primary)",
-          marginBottom: "4px",
+          marginBottom: "2px",
         }}
       >
         {user ? user.displayName : "notebook player"}
       </h1>
 
-      {user && (
-        <div style={{ fontSize: "13px", color: "var(--ink-secondary)", marginBottom: "16px" }}>
+      {user ? (
+        <div style={{ fontSize: "14px", color: "var(--ink-secondary)", marginBottom: "16px" }}>
           @{user.username || "player"}
+        </div>
+      ) : (
+        <div style={{ fontSize: "13px", color: "var(--ink-muted)", marginBottom: "16px" }}>
+          guest solver · local storage
         </div>
       )}
 
       {/* XP & Level Section */}
-      <div style={{ margin: "24px 0" }}>
+      <div style={{ margin: "20px 0" }}>
         <XPBar xp={currentXP} />
       </div>
 
-      {/* Summary stats */}
+      {/* Summary stats flat notebook row */}
       <div
         style={{
           display: "flex",
           justifyContent: "space-around",
-          padding: "16px 0",
-          borderTop: "1px solid var(--border-subtle)",
-          borderBottom: "1px solid var(--border-subtle)",
-          marginBottom: "20px",
-          fontFamily: "var(--font-mono)",
+          padding: "14px 0",
+          borderTop: "1px dashed var(--border-subtle)",
+          borderBottom: "1px dashed var(--border-subtle)",
+          margin: "20px 0",
         }}
       >
         <div>
-          <div style={{ fontSize: "18px", fontWeight: 700 }}>{solvedCount}</div>
-          <div style={{ fontSize: "12px", color: "var(--ink-secondary)", fontFamily: "var(--font-sans)" }}>solved</div>
+          <div style={{ fontSize: "20px", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{solvedCount}</div>
+          <div style={{ fontSize: "13px", color: "var(--ink-secondary)" }}>solved</div>
         </div>
         <div>
-          <div style={{ fontSize: "18px", fontWeight: 700 }}>{currentStreak}</div>
-          <div style={{ fontSize: "12px", color: "var(--ink-secondary)", fontFamily: "var(--font-sans)" }}>day streak</div>
+          <div style={{ fontSize: "20px", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{currentStreak}</div>
+          <div style={{ fontSize: "13px", color: "var(--ink-secondary)" }}>day streak</div>
         </div>
       </div>
 
       {/* Competitive summary link */}
       <div style={{ marginBottom: "24px" }}>
-        <Link
+        <DoodleButton
+          size="sm"
+          variant="secondary"
           href="/leaderboard"
-          className="doodle-button doodle-button-sm"
-          style={{ textDecoration: "none", fontSize: "13px" }}
+          icon="leaderboard"
         >
-          view leaderboard rankings →
-        </Link>
+          view leaderboard rankings
+        </DoodleButton>
       </div>
+
+      <DoodleDivider spacing="md" />
 
       {/* Auth actions */}
       {user ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "12px", alignItems: "center" }}>
           <div
             style={{
-              padding: "12px",
-              background: "rgba(0,0,0,0.02)",
-              borderRadius: "4px",
-              fontSize: "12px",
+              padding: "8px 14px",
+              fontSize: "13px",
               color: "var(--ink-secondary)",
-              textAlign: "left",
-              marginBottom: "8px",
+              textAlign: "center",
+              display: "flex",
+              flexDirection: "column",
+              gap: "2px",
             }}
           >
-            <div style={{ fontWeight: 600, marginBottom: "4px", color: "var(--ink-primary)" }}>Account Details</div>
-            <div>Email: {user.email}</div>
+            <div style={{ fontWeight: 600, color: "var(--ink-primary)" }}>account email</div>
+            <div>{user.email}</div>
           </div>
 
-          <button
-            type="button"
+          <DoodleButton
+            size="sm"
+            variant="danger"
             onClick={handleLogout}
-            className="doodle-button doodle-button-ghost"
-            style={{ fontSize: "13px" }}
           >
             log out
-          </button>
+          </DoodleButton>
         </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-          <p style={{ fontSize: "13px", color: "var(--ink-secondary)", marginBottom: "4px" }}>
-            create an account or log in to sync your puzzles across devices.
+        <div style={{ display: "flex", flexDirection: "column", gap: "12px", alignItems: "center" }}>
+          <p style={{ fontSize: "14px", color: "var(--ink-secondary)", maxWidth: "340px", lineHeight: 1.4 }}>
+            create an account or log in to sync your puzzles and streaks across all your devices.
           </p>
 
-          <div style={{ display: "flex", justifyContent: "center", gap: "12px" }}>
-            <Link href="/login" className="doodle-button" style={{ textDecoration: "none", fontSize: "13px" }}>
+          <div style={{ display: "flex", justifyContent: "center", gap: "10px", marginTop: "4px" }}>
+            <DoodleButton size="sm" variant="default" href="/login">
               log in
-            </Link>
-            <Link
-              href="/register"
-              className="doodle-button active"
-              style={{ textDecoration: "none", fontSize: "13px" }}
-            >
+            </DoodleButton>
+            <DoodleButton size="sm" variant="primary" href="/register">
               create account
-            </Link>
+            </DoodleButton>
           </div>
         </div>
       )}

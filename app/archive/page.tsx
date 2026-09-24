@@ -4,6 +4,8 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { getTodayDateString } from "@/lib/daily/streak";
 import { getCompletedDailyDates } from "@/lib/client/storage";
+import { DoodleButton } from "@/components/doodle/DoodleButton";
+import { DoodleIcon } from "@/components/doodle/DoodleIcon";
 
 export default function ArchivePage() {
   const todayStr = getTodayDateString();
@@ -39,8 +41,8 @@ export default function ArchivePage() {
   }, [currentYear, currentMonth]);
 
   const monthNames = [
-    "JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE",
-    "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"
+    "january", "february", "march", "april", "may", "june",
+    "july", "august", "september", "october", "november", "december"
   ];
 
   const firstDayOfMonth = new Date(currentYear, currentMonth - 1, 1).getDay();
@@ -76,9 +78,11 @@ export default function ArchivePage() {
     <div
       style={{
         width: "100%",
-        maxWidth: "480px",
+        maxWidth: "var(--page-reading, 520px)",
         margin: "12px auto",
-        padding: "16px 20px",
+        padding: "16px 20px 48px",
+        boxSizing: "border-box",
+        fontFamily: "var(--font-doodle)",
       }}
     >
       {/* Month & Navigation */}
@@ -90,35 +94,36 @@ export default function ArchivePage() {
           marginBottom: "20px",
         }}
       >
-        <button
-          type="button"
+        <DoodleButton
+          size="sm"
+          variant="default"
           onClick={handlePrevMonth}
-          className="doodle-button doodle-button-sm"
-          style={{ fontSize: "13px" }}
+          icon="arrow-left"
         >
-          ← prev
-        </button>
+          prev
+        </DoodleButton>
 
         <h1
           style={{
-            fontSize: "16px",
-            fontWeight: 700,
-            letterSpacing: "1px",
+            fontSize: "18px",
+            fontWeight: 600,
             color: "var(--ink-primary)",
+            textTransform: "lowercase",
+            margin: 0,
           }}
         >
           {monthNames[currentMonth - 1]} {currentYear}
         </h1>
 
-        <button
-          type="button"
+        <DoodleButton
+          size="sm"
+          variant="default"
           onClick={handleNextMonth}
           disabled={!canGoNext}
-          className="doodle-button doodle-button-sm"
-          style={{ fontSize: "13px", opacity: canGoNext ? 1 : 0.3 }}
+          iconRight="arrow-right"
         >
-          next →
-        </button>
+          next
+        </DoodleButton>
       </div>
 
       {/* Weekday Header */}
@@ -127,19 +132,19 @@ export default function ArchivePage() {
           display: "grid",
           gridTemplateColumns: "repeat(7, 1fr)",
           textAlign: "center",
-          fontFamily: "var(--font-doodle)",
           fontSize: "14px",
           color: "var(--ink-secondary)",
-          marginBottom: "12px",
+          marginBottom: "10px",
+          fontWeight: 600,
         }}
       >
-        <span>M</span>
-        <span>T</span>
-        <span>W</span>
-        <span>T</span>
-        <span>F</span>
-        <span>S</span>
-        <span>S</span>
+        <span>m</span>
+        <span>t</span>
+        <span>w</span>
+        <span>t</span>
+        <span>f</span>
+        <span>s</span>
+        <span>s</span>
       </div>
 
       {/* Days Grid */}
@@ -147,13 +152,13 @@ export default function ArchivePage() {
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(7, 1fr)",
-          gap: "8px 4px",
+          gap: "6px 4px",
           textAlign: "center",
         }}
       >
         {/* Empty cells before start of month */}
         {Array.from({ length: startDay }).map((_, i) => (
-          <div key={`empty-${i}`} style={{ height: "48px" }} />
+          <div key={`empty-${i}`} style={{ height: "46px" }} />
         ))}
 
         {/* Days of month */}
@@ -169,13 +174,13 @@ export default function ArchivePage() {
               <div
                 key={dateStr}
                 style={{
-                  height: "48px",
+                  height: "46px",
                   display: "flex",
                   flexDirection: "column",
                   alignItems: "center",
                   justifyContent: "center",
                   color: "var(--ink-muted)",
-                  opacity: 0.3,
+                  opacity: 0.35,
                   fontSize: "14px",
                 }}
               >
@@ -191,30 +196,35 @@ export default function ArchivePage() {
               style={{
                 textDecoration: "none",
                 color: "var(--ink-primary)",
-                height: "48px",
+                height: "46px",
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "center",
                 justifyContent: "center",
-                border: isToday ? "1.5px solid var(--ink-primary)" : "1px solid transparent",
-                borderRadius: "255px 6px 225px 6px/6px 225px 6px 255px",
-                backgroundColor: isToday ? "var(--highlight-cell)" : "transparent",
-                transition: "background-color 0.1s ease",
+                backgroundColor: isToday ? "var(--highlight-cell)" : "var(--bg-paper)",
+                borderStyle: "solid",
+                borderWidth: "10px",
+                borderImage: "url(/doodle/button.svg) 10 10 10 10 stretch stretch",
+                boxSizing: "border-box",
+                padding: 0,
               }}
               title={`Daily puzzle for ${dateStr}`}
             >
-              <span style={{ fontSize: "14px", fontWeight: isToday ? 700 : 500 }}>
+              <span style={{ fontSize: "14px", fontWeight: isToday ? 700 : 500, lineHeight: 1.1 }}>
                 {dayNum}
               </span>
               <span
                 style={{
-                  fontSize: "12px",
+                  fontSize: "11px",
                   lineHeight: 1,
-                  fontFamily: "var(--font-doodle)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  height: "12px",
                   color: isCompleted ? "var(--success-ink)" : "var(--ink-muted)",
                 }}
               >
-                {isCompleted ? "✓" : "·"}
+                {isCompleted ? <DoodleIcon name="check" size={12} /> : "·"}
               </span>
             </Link>
           );
@@ -224,18 +234,22 @@ export default function ArchivePage() {
       {/* Legend */}
       <div
         style={{
-          marginTop: "32px",
+          marginTop: "28px",
           display: "flex",
           justifyContent: "center",
-          gap: "20px",
-          fontSize: "12px",
+          alignItems: "center",
+          gap: "18px",
+          fontSize: "13px",
           color: "var(--ink-secondary)",
-          fontFamily: "var(--font-doodle)",
         }}
       >
-        <span>✓ completed</span>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+          <DoodleIcon name="check" size={13} color="var(--success-ink)" /> completed
+        </span>
         <span>· unplayed</span>
-        <span>highlight: today</span>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+          <span style={{ width: "12px", height: "12px", backgroundColor: "var(--highlight-cell)", border: "1px solid var(--ink-primary)" }} /> today
+        </span>
       </div>
     </div>
   );

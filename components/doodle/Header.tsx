@@ -5,6 +5,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { loadGuestProfile } from "@/lib/client/storage";
 import { DoodleUnderline } from "./DoodleUnderline";
+import { DoodleIcon } from "./DoodleIcon";
+import { DoodleBadge } from "./DoodleBadge";
+import { DoodlePanel } from "./DoodlePanel";
 
 interface HeaderProps {
   user?: {
@@ -68,7 +71,7 @@ export function Header({ user: serverUser }: HeaderProps) {
     <header
       style={{
         width: "100%",
-        maxWidth: "680px",
+        maxWidth: "var(--page-wide, 680px)",
         margin: "0 auto",
         padding: "16px 20px 8px",
         display: "flex",
@@ -76,6 +79,7 @@ export function Header({ user: serverUser }: HeaderProps) {
         justifyContent: "space-between",
         position: "relative",
         zIndex: 40,
+        fontFamily: "var(--font-doodle)",
       }}
     >
       {/* Brand with daily81.svg Logo */}
@@ -102,11 +106,11 @@ export function Header({ user: serverUser }: HeaderProps) {
             fontSize: "20px",
             fontWeight: 700,
             letterSpacing: "-0.5px",
-            fontFamily: "var(--font-sans)",
             lineHeight: 1,
+            color: "var(--ink-primary)",
           }}
         >
-          daily<span className="font-doodle" style={{ color: "var(--ink-secondary)", fontSize: "18px" }}>81</span>
+          daily<span style={{ color: "var(--ink-secondary)", fontSize: "18px" }}>81</span>
         </span>
       </Link>
 
@@ -127,7 +131,7 @@ export function Header({ user: serverUser }: HeaderProps) {
               href={link.href}
               style={{
                 textDecoration: "none",
-                fontSize: "14px",
+                fontSize: "15px",
                 fontWeight: isActive ? 600 : 400,
                 color: isActive ? "var(--ink-primary)" : "var(--ink-secondary)",
                 position: "relative",
@@ -158,48 +162,39 @@ export function Header({ user: serverUser }: HeaderProps) {
       <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
         <Link
           href="/profile"
-          style={{
-            textDecoration: "none",
-            color: "var(--ink-primary)",
-            fontSize: "13px",
-            fontWeight: 600,
-            fontFamily: "var(--font-mono)",
-            padding: "3px 10px",
-            border: "1.5px solid var(--ink-primary)",
-            borderRadius: "255px 8px 225px 8px/8px 225px 8px 255px",
-            backgroundColor: "var(--bg-paper)",
-            transition: "background-color 0.1s ease",
-          }}
+          style={{ textDecoration: "none" }}
           className="desktop-nav"
         >
-          Lv. {clientLevel}
+          <DoodleBadge variant="default" size="sm">
+            Lv. {clientLevel}
+          </DoodleBadge>
         </Link>
 
         {/* Mobile Hamburger Button */}
         <button
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          aria-label="Toggle Menu"
+          aria-label={isMobileMenuOpen ? "Close menu" : "Open menu"}
           style={{
             background: "none",
             border: "none",
             cursor: "pointer",
             padding: "6px",
             color: "var(--ink-primary)",
-            fontSize: "20px",
             display: "none",
             position: "relative",
+            lineHeight: 1,
           }}
           className="mobile-toggle-btn"
         >
-          {isMobileMenuOpen ? "✕" : "☰"}
+          <DoodleIcon name={isMobileMenuOpen ? "close" : "menu"} size={22} />
           {unreadCount > 0 && !isMobileMenuOpen && (
             <span
               style={{
                 position: "absolute",
                 top: "4px",
                 right: "4px",
-                width: "6px",
-                height: "6px",
+                width: "7px",
+                height: "7px",
                 backgroundColor: "var(--error-ink)",
                 borderRadius: "50%",
               }}
@@ -216,89 +211,91 @@ export function Header({ user: serverUser }: HeaderProps) {
             top: "100%",
             left: "16px",
             right: "16px",
-            backgroundColor: "var(--bg-paper)",
-            border: "1.5px solid var(--ink-primary)",
-            borderRadius: "255px 12px 225px 12px/12px 225px 12px 255px",
-            padding: "16px 20px",
-            display: "flex",
-            flexDirection: "column",
-            gap: "12px",
-            boxShadow: "0 8px 24px rgba(0,0,0,0.06)",
             zIndex: 50,
           }}
         >
-          {navLinks.map((link) => {
-            const isActive = pathname === link.href || (link.href === "/daily" && pathname === "/");
-            return (
+          <DoodlePanel
+            variant="default"
+            padding="md"
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "10px",
+            }}
+          >
+            {navLinks.map((link) => {
+              const isActive = pathname === link.href || (link.href === "/daily" && pathname === "/");
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  style={{
+                    textDecoration: "none",
+                    fontSize: "16px",
+                    fontWeight: isActive ? 600 : 400,
+                    color: "var(--ink-primary)",
+                    padding: "6px 0",
+                    borderBottom: "1px dashed var(--border-subtle)",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                >
+                  <span>{link.label}</span>
+                  {link.badge && (
+                    <DoodleBadge variant="error" size="sm">
+                      new
+                    </DoodleBadge>
+                  )}
+                </Link>
+              );
+            })}
+            <Link
+              href="/stats"
+              onClick={() => setIsMobileMenuOpen(false)}
+              style={{
+                textDecoration: "none",
+                fontSize: "16px",
+                color: "var(--ink-primary)",
+                padding: "6px 0",
+                borderBottom: "1px dashed var(--border-subtle)",
+              }}
+            >
+              stats
+            </Link>
+            <Link
+              href="/settings"
+              onClick={() => setIsMobileMenuOpen(false)}
+              style={{
+                textDecoration: "none",
+                fontSize: "16px",
+                color: "var(--ink-primary)",
+                padding: "6px 0",
+                borderBottom: "1px dashed var(--border-subtle)",
+              }}
+            >
+              settings
+            </Link>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "6px" }}>
               <Link
-                key={link.href}
-                href={link.href}
+                href="/profile"
                 onClick={() => setIsMobileMenuOpen(false)}
                 style={{
                   textDecoration: "none",
-                  fontSize: "16px",
-                  fontWeight: isActive ? 600 : 400,
                   color: "var(--ink-primary)",
-                  padding: "6px 0",
-                  borderBottom: "1px solid var(--border-subtle)",
-                  display: "flex",
-                  justifyContent: "space-between",
+                  fontSize: "15px",
+                  fontWeight: 600,
+                  display: "inline-flex",
                   alignItems: "center",
+                  gap: "6px",
                 }}
               >
-                <span>{link.label}</span>
-                {link.badge && (
-                  <span
-                    style={{
-                      backgroundColor: "var(--error-ink)",
-                      color: "#fff",
-                      fontSize: "11px",
-                      borderRadius: "50%",
-                      padding: "1px 6px",
-                      fontWeight: 700,
-                    }}
-                  >
-                    new
-                  </span>
-                )}
+                <span>profile</span>
+                <DoodleBadge variant="highlight" size="sm">Lv. {clientLevel}</DoodleBadge>
               </Link>
-            );
-          })}
-          <Link
-            href="/stats"
-            onClick={() => setIsMobileMenuOpen(false)}
-            style={{
-              textDecoration: "none",
-              fontSize: "16px",
-              color: "var(--ink-primary)",
-              padding: "6px 0",
-              borderBottom: "1px solid var(--border-subtle)",
-            }}
-          >
-            stats
-          </Link>
-          <Link
-            href="/settings"
-            onClick={() => setIsMobileMenuOpen(false)}
-            style={{
-              textDecoration: "none",
-              fontSize: "16px",
-              color: "var(--ink-primary)",
-              padding: "6px 0",
-              borderBottom: "1px solid var(--border-subtle)",
-            }}
-          >
-            settings
-          </Link>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "8px" }}>
-            <Link
-              href="/profile"
-              onClick={() => setIsMobileMenuOpen(false)}
-              style={{ textDecoration: "none", color: "var(--ink-primary)", fontSize: "14px", fontWeight: 600 }}
-            >
-              profile & level (Lv. {clientLevel})
-            </Link>
-          </div>
+            </div>
+          </DoodlePanel>
         </div>
       )}
 
