@@ -793,12 +793,19 @@ export function SudokuGame({
         return;
       }
 
+      // Check if digit already has 9 instances on the board (block duplicate input from keyboard or mouse)
+      const currentDigitCount = cellsRef.current.reduce((acc, c) => (c.value === num ? acc + 1 : acc), 0);
+      if (currentDigitCount >= 9) {
+        return;
+      }
+
       // 3. OPTIMISTIC DIGIT PLACEMENT (Immediate UI response)
       soundEngine.playPencilDigit();
       triggerHaptic("tap", settings.haptics);
 
       const peerIndices = getPeers(targetIndex);
       const removedPeerNotes: { index: number; notes: number[] }[] = [];
+
 
       const currentCellRevision = ++cellRevisionsRef.current[targetIndex];
       boardRevisionRef.current++;
@@ -1120,18 +1127,36 @@ export function SudokuGame({
       if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
         e.preventDefault();
         setSelectedIndex((curr) => {
-          if (curr === null) return 0;
-          const r = getRow(curr);
-          const c = getCol(curr);
+          const baseIndex = curr !== null ? curr : 0;
+          const r = getRow(baseIndex);
+          const c = getCol(baseIndex);
 
-          if (e.key === "ArrowUp") return r > 0 ? (r - 1) * 9 + c : curr;
-          if (e.key === "ArrowDown") return r < 8 ? (r + 1) * 9 + c : curr;
-          if (e.key === "ArrowLeft") return c > 0 ? r * 9 + (c - 1) : curr;
-          if (e.key === "ArrowRight") return c < 8 ? r * 9 + (c + 1) : curr;
-          return curr;
+          let nextIndex = baseIndex;
+          if (curr === null) {
+            nextIndex = 0;
+          } else if (e.key === "ArrowUp") {
+            nextIndex = r > 0 ? (r - 1) * 9 + c : baseIndex;
+          } else if (e.key === "ArrowDown") {
+            nextIndex = r < 8 ? (r + 1) * 9 + c : baseIndex;
+          } else if (e.key === "ArrowLeft") {
+            nextIndex = c > 0 ? r * 9 + (c - 1) : baseIndex;
+          } else if (e.key === "ArrowRight") {
+            nextIndex = c < 8 ? r * 9 + (c + 1) : baseIndex;
+          }
+
+          // Synchronize DOM focus for screen readers and accessibility
+          setTimeout(() => {
+            const cellEl = document.querySelector<HTMLElement>(`[data-index="${nextIndex}"]`);
+            if (cellEl) {
+              cellEl.focus();
+            }
+          }, 0);
+
+          return nextIndex;
         });
         return;
       }
+
 
       // Escape to deselect
       if (e.key === "Escape") {

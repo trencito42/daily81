@@ -83,10 +83,14 @@ export function generateSudoku(difficulty: Difficulty, seedInput?: string, date?
 
 /**
  * Generates the official Daily Sudoku for a specific YYYY-MM-DD date.
- * Deterministic for all players.
+ * Deterministic for all players via server-side DAILY_SEED_PEPPER.
  */
 export function generateDailySudoku(dateStr: string, difficulty: Difficulty = "hard"): ServerSudokuPuzzle {
-  const seed = `daily81-${dateStr}`;
+  const pepper = process.env.DAILY_SEED_PEPPER;
+  if (!pepper && process.env.NODE_ENV === "production") {
+    throw new Error("DAILY_SEED_PEPPER environment variable is required in production");
+  }
+  const seed = pepper ? `daily81-${dateStr}-${pepper}` : `daily81-${dateStr}`;
   return generateSudoku(difficulty, seed, dateStr);
 }
 

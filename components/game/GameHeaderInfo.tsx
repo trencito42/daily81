@@ -157,7 +157,7 @@ export function GameHeaderInfo({
               fontSize: "13px",
             }}
           >
-            {syncStatus && (
+            {syncStatus && syncStatus !== "saved" && (
               <span
                 style={{
                   fontSize: "11px",
@@ -165,7 +165,7 @@ export function GameHeaderInfo({
                   opacity: 0.85,
                 }}
               >
-                {syncStatus === "saving" ? "syncing..." : syncStatus === "saved" ? "synced" : "offline"}
+                {syncStatus === "saving" ? "syncing..." : "offline"}
               </span>
             )}
             <span

@@ -2,12 +2,14 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { getPuzzleByKey } from "@/lib/puzzles/puzzleService";
+import { checkRateLimit, getClientIp, rateLimitResponse } from "@/lib/security/rateLimit";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
   try {
     const session = await getSession(req);
+    const clientIp = getClientIp(req);
     const body = await req.json();
     const puzzleKey = body.puzzleKey;
     const cellIndex = typeof body.cellIndex === "number" ? body.cellIndex : body.index;
@@ -16,6 +18,22 @@ export async function POST(req: Request) {
     if (!puzzleKey || typeof cellIndex !== "number" || typeof value !== "number") {
       return NextResponse.json({ error: "Invalid move check payload" }, { status: 400 });
     }
+
+    // Rate limiting: max 120 checks / min / user (or IP) + puzzleKey
+    const rateLimitKey = `check-move:${session?.id || clientIp}:${puzzleKey}`;
+    const rl = checkRateLimit({
+      key: rateLimitKey,
+      maxRequests: 120,
+      windowSeconds: 60,
+    });
+
+    if (!rl.allowed) {
+      return rateLimitResponse(
+        "Too many move checks. Please slow down.",
+        rl.resetSeconds
+      );
+    }
+
 
     if (cellIndex < 0 || cellIndex > 80 || value < 1 || value > 9) {
       return NextResponse.json({ error: "Cell or value out of bounds" }, { status: 400 });

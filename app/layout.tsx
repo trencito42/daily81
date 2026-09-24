@@ -58,6 +58,15 @@ export default async function RootLayout({
 
   return (
     <html lang="en">
+      <head>
+        {/* Analytics */}
+        <script
+          src="https://witch.pw/sdk/browser.js"
+          data-project="wep_327d39f97e1b3dd73e2ceac3e211980dd79911720934254b"
+          crossOrigin="anonymous"
+          async
+        />
+      </head>
       <body className="doodle" style={{ minHeight: "100dvh", display: "flex", flexDirection: "column" }}>
         <Header user={user} />
         <main style={{ flex: 1, display: "flex", flexDirection: "column", width: "100%" }}>

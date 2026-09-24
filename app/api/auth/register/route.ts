@@ -5,12 +5,31 @@ import { createSessionToken, setSessionCookie } from "@/lib/auth/session";
 import { getLevelFromXP } from "@/lib/xp/progression";
 import { sendWelcomeEmail } from "@/lib/email/mailer";
 import { validateUsername } from "@/lib/auth/username";
+import { checkRateLimit, getClientIp, rateLimitResponse } from "@/lib/security/rateLimit";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
   try {
+    const clientIp = getClientIp(req);
+
+    // Rate limiting: max 5 registrations / hour / IP
+    const rateLimitKey = `register:${clientIp}`;
+    const rl = checkRateLimit({
+      key: rateLimitKey,
+      maxRequests: 5,
+      windowSeconds: 3600,
+    });
+
+    if (!rl.allowed) {
+      return rateLimitResponse(
+        "Too many registration attempts from this IP. Please try again later.",
+        rl.resetSeconds
+      );
+    }
+
     const { email, password, displayName, username, guestProfile } = await req.json();
+
 
     if (!email || !password || typeof email !== "string" || typeof password !== "string") {
       return NextResponse.json({ error: "Email and password are required" }, { status: 400 });

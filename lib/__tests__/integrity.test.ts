@@ -24,6 +24,42 @@ describe("Daily Puzzle Date & Timezone Integrity", () => {
     expect(puzzleA.seed).toBe(puzzleB.seed);
   });
 
+  it("produces different solutions when DAILY_SEED_PEPPER changes", () => {
+    const date = "2026-09-24";
+    const originalPepper = process.env.DAILY_SEED_PEPPER;
+
+    try {
+      process.env.DAILY_SEED_PEPPER = "pepper_alpha_123";
+      const puzzleAlpha = generateDailySudoku(date, "hard");
+
+      process.env.DAILY_SEED_PEPPER = "pepper_beta_456";
+      const puzzleBeta = generateDailySudoku(date, "hard");
+
+      expect(puzzleAlpha.solutionGrid).not.toBe(puzzleBeta.solutionGrid);
+      expect(puzzleAlpha.initialGrid).not.toBe(puzzleBeta.initialGrid);
+    } finally {
+      process.env.DAILY_SEED_PEPPER = originalPepper;
+    }
+  });
+
+  it("throws in production when DAILY_SEED_PEPPER is missing", () => {
+    const env = process.env as Record<string, string | undefined>;
+    const originalNodeEnv = env.NODE_ENV;
+    const originalPepper = env.DAILY_SEED_PEPPER;
+
+    try {
+      env.NODE_ENV = "production";
+      delete env.DAILY_SEED_PEPPER;
+
+      expect(() => generateDailySudoku("2026-09-24", "hard")).toThrow(
+        "DAILY_SEED_PEPPER environment variable is required in production"
+      );
+    } finally {
+      env.NODE_ENV = originalNodeEnv;
+      env.DAILY_SEED_PEPPER = originalPepper;
+    }
+  });
+
   it("rejects future daily puzzle dates", () => {
     const futureDate = "2099-01-01";
     expect(isFutureDate(futureDate)).toBe(true);
@@ -154,4 +190,37 @@ describe("Competitive Leaderboard & Social Invariants", () => {
     expect(validateUsername("valid_player12").valid).toBe(true);
   });
 });
+
+describe("Security & Rate Limiting", () => {
+  it("enforces sliding window rate limit correctly", async () => {
+    const { checkRateLimit, resetRateLimit } = await import("../security/rateLimit");
+    const key = `test-limit-${Date.now()}`;
+    resetRateLimit(key);
+
+    // 3 allowed requests
+    const r1 = checkRateLimit({ key, maxRequests: 3, windowSeconds: 10 });
+    expect(r1.allowed).toBe(true);
+    expect(r1.remaining).toBe(2);
+
+    const r2 = checkRateLimit({ key, maxRequests: 3, windowSeconds: 10 });
+    expect(r2.allowed).toBe(true);
+    expect(r2.remaining).toBe(1);
+
+    const r3 = checkRateLimit({ key, maxRequests: 3, windowSeconds: 10 });
+    expect(r3.allowed).toBe(true);
+    expect(r3.remaining).toBe(0);
+
+    // 4th request blocked
+    const r4 = checkRateLimit({ key, maxRequests: 3, windowSeconds: 10 });
+    expect(r4.allowed).toBe(false);
+    expect(r4.remaining).toBe(0);
+    expect(r4.resetSeconds).toBeGreaterThan(0);
+
+    // Reset works
+    resetRateLimit(key);
+    const r5 = checkRateLimit({ key, maxRequests: 3, windowSeconds: 10 });
+    expect(r5.allowed).toBe(true);
+  });
+});
+
 

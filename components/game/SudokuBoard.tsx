@@ -24,6 +24,12 @@ export function SudokuBoard({
   const selectedCol = selectedCell ? selectedCell.col : null;
   const selectedBlock = selectedCell ? selectedCell.block : null;
 
+  // First non-given cell (or 0) gets tabIndex=0 when board has no active selection
+  const defaultFocusIndex = React.useMemo(() => {
+    const firstPlayable = cells.findIndex((c) => !c.given);
+    return firstPlayable !== -1 ? firstPlayable : 0;
+  }, [cells]);
+
   return (
     <div className="sudoku-container" role="grid" aria-label="Sudoku Board 9x9">
       {/* 3x3 Hand-drawn Divider Stroke Overlay */}
@@ -75,6 +81,7 @@ export function SudokuBoard({
       <div className="sudoku-grid">
         {cells.map((cell) => {
           const isSelected = selectedIndex === cell.index;
+          const isTabTarget = selectedIndex === null ? cell.index === defaultFocusIndex : isSelected;
           const isPeer =
             highlightRelated &&
             !isSelected &&
@@ -110,9 +117,11 @@ export function SudokuBoard({
               aria-label={`Row ${cell.row + 1}, Column ${cell.col + 1}${
                 cell.value !== 0 ? `, value ${cell.value}` : ", empty"
               }`}
-              tabIndex={isSelected ? 0 : -1}
+              tabIndex={isTabTarget ? 0 : -1}
+              data-index={cell.index}
               className={classNames}
               onClick={() => onSelectCell(cell.index)}
+              onFocus={() => onSelectCell(cell.index)}
             >
               {cell.value !== 0 ? (
                 <span className={cell.isMistake ? "animate-pop" : ""}>{cell.value}</span>
@@ -132,3 +141,4 @@ export function SudokuBoard({
     </div>
   );
 }
+

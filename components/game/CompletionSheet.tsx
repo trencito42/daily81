@@ -39,7 +39,7 @@ export function CompletionSheet({
   onReplayPractice,
   onPlayAnother,
 }: CompletionSheetProps) {
-  const [copied, setCopied] = useState(false);
+  const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "error">("idle");
 
   const minutes = Math.floor(elapsedSeconds / 60);
   const seconds = elapsedSeconds % 60;
@@ -47,7 +47,20 @@ export function CompletionSheet({
 
   const totalXP = xpBreakdown ? xpBreakdown.totalXP : xpAwarded;
 
-  const handleShare = () => {
+  const nextDailyInfo = React.useMemo(() => {
+    if (!isDaily || typeof window === "undefined") return null;
+    const now = new Date();
+    const nextUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0));
+    try {
+      const timeStr = nextUTC.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      const hoursLeft = Math.max(1, Math.round((nextUTC.getTime() - now.getTime()) / (1000 * 60 * 60)));
+      return { timeStr, hoursLeft };
+    } catch {
+      return null;
+    }
+  }, [isDaily]);
+
+  const handleShare = async () => {
     let text = "";
     if (isPractice) {
       text = `daily81 (practice) - ${difficulty.toUpperCase()}\nSolved in ${timeFormatted}\nhttps://daily81.com`;
@@ -57,10 +70,41 @@ export function CompletionSheet({
       text = `daily81 - ${difficulty.toUpperCase()}\nSolved in ${timeFormatted}\n+${totalXP} XP\nhttps://daily81.com`;
     }
 
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+    let success = false;
+    if (typeof navigator !== "undefined" && navigator.clipboard && navigator.clipboard.writeText) {
+      try {
+        await navigator.clipboard.writeText(text);
+        success = true;
+      } catch {
+        success = false;
+      }
+    }
+
+    // Fallback using textarea execCommand
+    if (!success && typeof document !== "undefined") {
+      try {
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        textarea.style.position = "fixed";
+        textarea.style.left = "-9999px";
+        textarea.style.top = "-9999px";
+        textarea.setAttribute("readonly", "");
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        success = document.execCommand("copy");
+        document.body.removeChild(textarea);
+      } catch {
+        success = false;
+      }
+    }
+
+    if (success) {
+      setCopyStatus("copied");
+      setTimeout(() => setCopyStatus("idle"), 2000);
+    } else {
+      setCopyStatus("error");
+      setTimeout(() => setCopyStatus("idle"), 3000);
     }
   };
 
@@ -237,6 +281,20 @@ export function CompletionSheet({
         </div>
       )}
 
+      {/* Next Daily Puzzle Unlock Indicator */}
+      {isDaily && nextDailyInfo && (
+        <div
+          style={{
+            fontSize: "12px",
+            color: "var(--ink-secondary)",
+            margin: "6px 0 10px",
+            fontStyle: "italic",
+          }}
+        >
+          next daily sudoku appears at {nextDailyInfo.timeStr} (in ~{nextDailyInfo.hoursLeft}h · 00:00 UTC)
+        </div>
+      )}
+
       {/* Action Buttons */}
       <div style={{ display: "flex", justifyContent: "center", gap: "8px", flexWrap: "wrap", marginTop: "12px" }}>
         {isDaily && (
@@ -276,11 +334,16 @@ export function CompletionSheet({
           size="sm"
           variant="secondary"
           onClick={handleShare}
-          icon={copied ? "check" : undefined}
+          icon={copyStatus === "copied" ? "check" : undefined}
         >
-          {copied ? "copied!" : "share result"}
+          {copyStatus === "copied"
+            ? "copied!"
+            : copyStatus === "error"
+            ? "could not copy — copy manually"
+            : "share result"}
         </DoodleButton>
       </div>
     </DoodlePanel>
   );
 }
+

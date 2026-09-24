@@ -267,6 +267,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ puzzleKe
       }
     }
 
+    const now = Date.now();
     const elapsed = Math.min(864000, Math.max(0, Math.floor(Number(elapsedSeconds) || 0)));
     const mistakeCount = Math.min(1000, Math.max(0, Math.floor(Number(mistakes) || 0)));
     const hintCount = Math.min(81, Math.max(0, Math.floor(Number(hintsUsed) || 0)));
@@ -297,10 +298,15 @@ export async function PUT(req: Request, { params }: { params: Promise<{ puzzleKe
 
       const clientExpectedVer = typeof expectedVersion === "number" ? expectedVersion : existing.version;
 
+      // Real-time elapsed validation: cap elapsed at real seconds since startedAt + 10s network grace margin
+      const sessionStartedMs = existing.startedAt ? new Date(existing.startedAt).getTime() : now;
+      const realElapsedMax = Math.max(0, Math.floor((now - sessionStartedMs) / 1000) + 10);
+      const validatedElapsed = Math.min(elapsed, realElapsedMax);
+
       // Monotonic guards
       const finalHints = Math.max(existing.hintsUsed, hintCount);
       const finalMistakes = Math.max(existing.mistakes, mistakeCount);
-      const finalElapsed = Math.max(existing.elapsedSeconds, elapsed);
+      const finalElapsed = Math.min(864000, Math.max(existing.elapsedSeconds, validatedElapsed));
 
       // ATOMIC UPDATE with version condition
       const updateResult = await prisma.gameSession.updateMany({
@@ -348,7 +354,10 @@ export async function PUT(req: Request, { params }: { params: Promise<{ puzzleKe
       });
     }
 
-    // Create new session safely
+    // Create new session safely: clamp initial elapsed to network margin
+    const initialElapsed = Math.min(elapsed, 10);
+    const sessionStartedAt = new Date(now - initialElapsed * 1000);
+
     try {
       const created = await prisma.gameSession.create({
         data: {
@@ -357,11 +366,11 @@ export async function PUT(req: Request, { params }: { params: Promise<{ puzzleKe
           puzzleKey,
           currentGrid,
           notesData: notesDataStr,
-          elapsedSeconds: elapsed,
+          elapsedSeconds: initialElapsed,
           mistakes: mistakeCount,
           hintsUsed: hintCount,
           isStarted: Boolean(isStarted),
-          startedAt: new Date(),
+          startedAt: sessionStartedAt,
           version: 1,
           completed: false,
         },
@@ -397,3 +406,70 @@ export async function PUT(req: Request, { params }: { params: Promise<{ puzzleKe
     return NextResponse.json({ error: "Failed to save progress" }, { status: 500 });
   }
 }
+
+/**
+ * DELETE handler for session recovery / debugging:
+ * Allows an authenticated user or admin to reset an uncompleted GameSession back to initial state.
+ */
+export async function DELETE(req: Request, { params }: { params: Promise<{ puzzleKey: string }> }) {
+  try {
+    const sessionUser = await getSession(req);
+    if (!sessionUser) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { puzzleKey } = await params;
+    if (!puzzleKey) {
+      return NextResponse.json({ error: "Missing puzzleKey" }, { status: 400 });
+    }
+
+    const puzzle = await getPuzzleByKey(puzzleKey);
+    if (!puzzle) {
+      return NextResponse.json({ error: "Puzzle not found" }, { status: 404 });
+    }
+
+    const existing = await prisma.gameSession.findUnique({
+      where: {
+        user_puzzle_session_unique: {
+          userId: sessionUser.id,
+          puzzleId: puzzle.id,
+        },
+      },
+    });
+
+    if (!existing) {
+      return NextResponse.json({ success: true, message: "No active session to reset" });
+    }
+
+    if (existing.completed) {
+      return NextResponse.json({ error: "Cannot reset a completed game session" }, { status: 400 });
+    }
+
+    // Reset uncompleted session by deleting the corrupted record so player can start cleanly
+    await prisma.gameSession.delete({
+      where: { id: existing.id },
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: "Game session reset successfully",
+      progress: {
+        puzzleKey,
+        currentGrid: puzzle.initialGrid,
+        notes: {},
+        elapsedSeconds: 0,
+        mistakes: 0,
+        hintsUsed: 0,
+        isStarted: false,
+        completed: false,
+        completedAt: null,
+        version: 1,
+        xpAwarded: 0,
+      },
+    });
+  } catch (err) {
+    console.error("DELETE progress error:", err);
+    return NextResponse.json({ error: "Failed to reset session" }, { status: 500 });
+  }
+}
+

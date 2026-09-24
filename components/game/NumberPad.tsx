@@ -110,7 +110,7 @@ export function NumberPad({
           variant="default"
           onClick={onUndo}
           disabled={disabled || !canUndo}
-          title="Undo last move (Ctrl+Z)"
+          title="Undo last move (Ctrl+Z) — mistakes remain recorded"
           style={{ minHeight: "38px", padding: "4px 2px", fontSize: "13px", opacity: canUndo ? 1 : 0.4 }}
         >
           <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>

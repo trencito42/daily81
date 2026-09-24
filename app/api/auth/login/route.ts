@@ -2,18 +2,36 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { verifyPassword } from "@/lib/auth/password";
 import { createSessionToken, setSessionCookie } from "@/lib/auth/session";
+import { checkRateLimit, getClientIp, rateLimitResponse } from "@/lib/security/rateLimit";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
   try {
-    const { email, password } = await req.json();
+    const clientIp = getClientIp(req);
+    const body = await req.json();
+    const { email, password } = body;
 
     if (!email || !password) {
       return NextResponse.json({ error: "Email and password are required" }, { status: 400 });
     }
 
     const normalizedEmail = String(email).toLowerCase().trim();
+
+    // Rate limiting: max 5 attempts / 15 min / IP+email
+    const rateLimitKey = `login:${clientIp}:${normalizedEmail}`;
+    const rl = checkRateLimit({
+      key: rateLimitKey,
+      maxRequests: 5,
+      windowSeconds: 15 * 60,
+    });
+
+    if (!rl.allowed) {
+      return rateLimitResponse(
+        "Too many login attempts. Please try again later.",
+        rl.resetSeconds
+      );
+    }
 
     const user = await prisma.user.findUnique({
       where: { email: normalizedEmail },
@@ -57,3 +75,4 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Authentication failed. Please try again." }, { status: 500 });
   }
 }
+

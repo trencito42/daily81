@@ -30,6 +30,7 @@ DATABASE_URL="mysql://daily81_user:your_secure_password_here@localhost:3306/dail
 
 NEXTAUTH_SECRET=your_32_character_secret_key
 NEXTAUTH_URL=https://daily81.com
+DAILY_SEED_PEPPER=your_private_server_seed_pepper_here
 ```
 
 ### 2. Database Migration
@@ -70,7 +71,7 @@ In CloudPanel Node.js site settings:
 ## Features & Architecture
 
 * **Sudoku Engine**: Pure TypeScript solver and deterministic generator (`lib/sudoku/`). Puzzles have guaranteed unique single solutions and mathematical difficulty ratings.
-* **Deterministic Daily Sudoku**: Seeded by calendar date (`daily81-YYYY-MM-DD`) so all global players solve the identical puzzle on each date.
+* **Daily Sudoku Integrity**: Deterministic across all players on a calendar date, protected by server-side private seed pepper.
 * **XP & Level Progression**: Deterministic level curve with bonus points for zero mistakes, no hints, daily completion, and speed.
 * **Timezone-Safe Streaks**: Normalized date comparisons to protect player streaks.
 * **Visual Identity**: Warm paper (`#FDF9F3`), primary ink (`#191919`), pencil highlights, Short Stack doodle accents, with pixel-perfect mathematical grid geometry.
