@@ -10,7 +10,6 @@ import { DoodleSelect } from "@/components/doodle/DoodleSelect";
 import { DoodleBadge } from "@/components/doodle/DoodleBadge";
 import { DoodleNotice } from "@/components/doodle/DoodleNotice";
 import { DoodleEmptyState } from "@/components/doodle/DoodleEmptyState";
-import { DoodleIcon } from "@/components/doodle/DoodleIcon";
 
 interface ChallengeItem {
   id: string;
@@ -44,6 +43,7 @@ interface ChallengeItem {
     roundNumber: number;
     elapsedSeconds: number;
     puzzlesSolved: number;
+    mistakes: number;
     isCompleted: boolean;
   }[];
 }
@@ -58,7 +58,7 @@ interface FriendOption {
 function ChallengesContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const opponentParam = searchParams.get("opponent") || "";
+  const opponentParam = searchParams.get("opponent") ?? searchParams.get("to") ?? "";
 
   const [activeTab, setActiveTab] = useState<"incoming" | "active" | "history" | "new">("incoming");
   const [loading, setLoading] = useState(true);
@@ -96,7 +96,7 @@ function ChallengesContent() {
       if (resC.ok) {
         const json = await resC.json();
         setChallenges(json.challenges || []);
-        setCurrentUserId(json.currentUserId);
+        setCurrentUserId(json.currentUserId || null);
       }
 
       if (resF.ok) {
@@ -129,12 +129,16 @@ function ChallengesContent() {
         body: JSON.stringify({ action: "respond", responseAction: action }),
       });
       if (res.ok) {
-        setFeedback(action === "accept" ? "Challenge accepted! Launching puzzle..." : "Challenge updated.");
         if (action === "accept") {
+          setFeedback("Challenge accepted! Launching puzzle...");
           router.push(`/challenges/${challengeId}`);
         } else {
+          setFeedback(action === "cancel" ? "Challenge cancelled." : "Challenge declined.");
           loadChallenges();
         }
+      } else {
+        const err = await res.json();
+        setFeedback(err.error || "Failed to respond to challenge.");
       }
     } catch {
       setFeedback("Failed to update challenge.");
@@ -158,7 +162,7 @@ function ChallengesContent() {
         body: JSON.stringify({
           targetUsername: targetUsername.trim(),
           mode: selectedMode,
-          difficulty: selectedDifficulty,
+          difficulty: selectedMode === "daily_duel" ? "hard" : selectedDifficulty,
           timeLimitMinutes: timeLimit,
           sprintCount,
           note: challengeNote.trim() || undefined,
@@ -186,20 +190,14 @@ function ChallengesContent() {
     setActiveTab("new");
   };
 
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
-  };
-
   const incomingChallenges = challenges.filter(
-    (c) => c.status === "pending" && c.opponentId === currentUserId
+    (c) => c.status === "pending" && currentUserId && c.opponentId === currentUserId
   );
   const activeChallenges = challenges.filter(
-    (c) => c.status === "active" || (c.status === "pending" && c.challengerId === currentUserId)
+    (c) => c.status === "active" || (c.status === "pending" && currentUserId && c.challengerId === currentUserId)
   );
   const historyChallenges = challenges.filter(
-    (c) => c.status === "completed" || c.status === "declined" || c.status === "expired"
+    (c) => c.status === "completed" || c.status === "declined" || c.status === "expired" || c.status === "cancelled"
   );
 
   if (!authenticated) {
@@ -230,13 +228,14 @@ function ChallengesContent() {
       label: "invites",
       count: incomingChallenges.length > 0 ? incomingChallenges.length : undefined,
     },
-    { id: "active", label: "active", count: activeChallenges.length },
+    { id: "active", label: "active", count: activeChallenges.length > 0 ? activeChallenges.length : undefined },
     { id: "history", label: "history" },
     { id: "new", label: "+ new challenge" },
   ];
 
   const modeTabs = [
     { id: "duel", label: "duel" },
+    { id: "daily_duel", label: "daily duel" },
     { id: "best_of_3", label: "best of 3" },
     { id: "time_attack", label: "time attack" },
     { id: "sprint", label: "sprint" },
@@ -299,7 +298,7 @@ function ChallengesContent() {
           activeTab={activeTab}
           size="sm"
           onChange={(id) => {
-            setActiveTab(id as any);
+            setActiveTab(id as "incoming" | "active" | "history" | "new");
             setFeedback(null);
           }}
         />
@@ -395,9 +394,9 @@ function ChallengesContent() {
           ) : (
             <div style={{ display: "flex", flexDirection: "column" }}>
               {activeChallenges.map((c) => {
-                const isMyTurn = true;
                 const otherPlayer = c.challengerId === currentUserId ? c.opponent : c.challenger;
                 const isSender = c.challengerId === currentUserId;
+                const isPending = c.status === "pending";
 
                 return (
                   <div
@@ -416,18 +415,31 @@ function ChallengesContent() {
                       </div>
                       <div style={{ fontSize: "12px", color: "var(--ink-secondary)", marginTop: "2px" }}>
                         {c.mode.replace(/_/g, " ")} · {c.difficulty}
-                        {c.status === "pending" && isSender && " · waiting for acceptance"}
+                        {isPending && isSender && " · waiting for acceptance"}
                       </div>
                     </div>
 
-                    <div>
-                      <DoodleButton
-                        size="sm"
-                        variant="primary"
-                        href={`/challenges/${c.id}`}
-                      >
-                        {c.status === "pending" ? "view" : "play match →"}
-                      </DoodleButton>
+                    <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                      {isPending && isSender ? (
+                        <>
+                          <DoodleBadge variant="muted" size="sm">waiting</DoodleBadge>
+                          <DoodleButton
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleRespond(c.id, "cancel")}
+                          >
+                            cancel
+                          </DoodleButton>
+                        </>
+                      ) : (
+                        <DoodleButton
+                          size="sm"
+                          variant="primary"
+                          href={`/challenges/${c.id}`}
+                        >
+                          play match →
+                        </DoodleButton>
+                      )}
                     </div>
                   </div>
                 );
@@ -574,31 +586,37 @@ function ChallengesContent() {
               tabs={modeTabs}
               activeTab={selectedMode}
               size="sm"
-              onChange={(id) => setSelectedMode(id as any)}
+              onChange={(id) => setSelectedMode(id as "duel" | "best_of_3" | "time_attack" | "sprint" | "daily_duel")}
             />
           </div>
 
-          {/* Difficulty */}
-          <div>
-            <label
-              style={{
-                fontFamily: "var(--font-doodle)",
-                fontSize: "14px",
-                color: "var(--ink-secondary)",
-                fontWeight: 500,
-                display: "block",
-                marginBottom: "6px",
-              }}
-            >
-              difficulty
-            </label>
-            <DoodleTabs
-              tabs={diffTabs}
-              activeTab={selectedDifficulty}
-              size="sm"
-              onChange={(id) => setSelectedDifficulty(id as any)}
-            />
-          </div>
+          {/* Difficulty Selection */}
+          {selectedMode !== "daily_duel" ? (
+            <div>
+              <label
+                style={{
+                  fontFamily: "var(--font-doodle)",
+                  fontSize: "14px",
+                  color: "var(--ink-secondary)",
+                  fontWeight: 500,
+                  display: "block",
+                  marginBottom: "6px",
+                }}
+              >
+                difficulty
+              </label>
+              <DoodleTabs
+                tabs={diffTabs}
+                activeTab={selectedDifficulty}
+                size="sm"
+                onChange={(id) => setSelectedDifficulty(id as "easy" | "medium" | "hard" | "expert")}
+              />
+            </div>
+          ) : (
+            <div style={{ fontSize: "13px", color: "var(--ink-secondary)" }}>
+              daily duel automatically uses today&apos;s canonical <strong>hard</strong> daily puzzle.
+            </div>
+          )}
 
           {/* Mode-specific settings */}
           {selectedMode === "time_attack" && (
@@ -613,7 +631,7 @@ function ChallengesContent() {
                   marginBottom: "4px",
                 }}
               >
-                time limit (minutes)
+                time limit
               </label>
               <DoodleSelect
                 value={timeLimit}
@@ -645,7 +663,6 @@ function ChallengesContent() {
                 value={sprintCount}
                 onChange={(e) => setSprintCount(Number(e.target.value))}
               >
-                <option value={2}>2 puzzles</option>
                 <option value={3}>3 puzzles</option>
                 <option value={5}>5 puzzles</option>
               </DoodleSelect>
@@ -659,7 +676,7 @@ function ChallengesContent() {
               placeholder="e.g. race you on hard mode!"
               value={challengeNote}
               onChange={(e) => setChallengeNote(e.target.value)}
-              maxLength={120}
+              maxLength={100}
             />
           </div>
 

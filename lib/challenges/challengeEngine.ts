@@ -91,7 +91,7 @@ export async function createChallenge(params: CreateChallengeParams) {
       },
     });
 
-    // Check if challenger already solved today's daily puzzle legitimately
+    // Check if challenger already solved today's daily puzzle legitimately with no hints
     const existingDaily = await prisma.dailyCompletion.findUnique({
       where: {
         user_daily_unique: {
@@ -174,6 +174,15 @@ export async function respondChallenge(challengeId: string, userId: string, acti
     return { success: false, error: "Challenge not found." };
   }
 
+  // Check expiration
+  if (challenge.expiresAt < new Date()) {
+    await prisma.challenge.update({
+      where: { id: challengeId },
+      data: { status: "expired" },
+    });
+    return { success: false, error: "This challenge invitation has expired." };
+  }
+
   if (action === "cancel") {
     if (challenge.challengerId !== userId) {
       return { success: false, error: "Only the challenger can cancel this invitation." };
@@ -201,7 +210,7 @@ export async function respondChallenge(challengeId: string, userId: string, acti
     return { success: true, action: "declined" };
   }
 
-  // Accept
+  // Accept -> Activate challenge
   await prisma.challenge.update({
     where: { id: challengeId },
     data: { status: "active" },
@@ -276,15 +285,27 @@ export async function startChallengeRound(params: {
     where: { id: challengeId },
   });
 
-  if (!challenge || (challenge.status !== "active" && challenge.status !== "pending")) {
-    return { success: false, error: "Challenge is not active." };
+  if (!challenge) {
+    return { success: false, error: "Challenge not found." };
+  }
+
+  // Expiration check
+  if (challenge.expiresAt < new Date()) {
+    await prisma.challenge.update({ where: { id: challengeId }, data: { status: "expired" } });
+    return { success: false, error: "Challenge has expired." };
+  }
+
+  // Strict: must be active (not pending, completed, cancelled, or declined)
+  if (challenge.status !== "active") {
+    return { success: false, error: `Challenge is not active (current status: ${challenge.status}).` };
   }
 
   if (challenge.challengerId !== userId && challenge.opponentId !== userId) {
-    return { success: false, error: "Unauthorized." };
+    return { success: false, error: "Unauthorized participant." };
   }
 
-  const attempt = await prisma.challengeAttempt.upsert({
+  // Immutable startedAt check: if attempt already exists, DO NOT reset startedAt!
+  const existingAttempt = await prisma.challengeAttempt.findUnique({
     where: {
       challenge_user_round_unique: {
         challengeId,
@@ -292,19 +313,28 @@ export async function startChallengeRound(params: {
         roundNumber,
       },
     },
-    update: {
-      startedAt: new Date(),
-    },
-    create: {
+  });
+
+  if (existingAttempt) {
+    return {
+      success: true,
+      startedAt: existingAttempt.startedAt,
+      isCompleted: existingAttempt.isCompleted,
+    };
+  }
+
+  const now = new Date();
+  const attempt = await prisma.challengeAttempt.create({
+    data: {
       challengeId,
       userId,
       roundNumber,
-      startedAt: new Date(),
+      startedAt: now,
       isCompleted: false,
     },
   });
 
-  return { success: true, startedAt: attempt.startedAt };
+  return { success: true, startedAt: attempt.startedAt, isCompleted: false };
 }
 
 export async function submitChallengeRoundAttempt(params: {
@@ -312,7 +342,6 @@ export async function submitChallengeRoundAttempt(params: {
   userId: string;
   roundNumber: number;
   finalGrid: string;
-  elapsedSeconds?: number;
   mistakes?: number;
   hintsUsed?: number;
 }) {
@@ -322,11 +351,21 @@ export async function submitChallengeRoundAttempt(params: {
     where: { id: challengeId },
     include: {
       rounds: { where: { roundNumber } },
+      attempts: { where: { userId } },
     },
   });
 
-  if (!challenge || (challenge.status !== "active" && challenge.status !== "pending")) {
-    return { success: false, error: "Challenge is not active." };
+  if (!challenge) {
+    return { success: false, error: "Challenge not found." };
+  }
+
+  if (challenge.expiresAt < new Date()) {
+    await prisma.challenge.update({ where: { id: challengeId }, data: { status: "expired" } });
+    return { success: false, error: "Challenge has expired." };
+  }
+
+  if (challenge.status !== "active") {
+    return { success: false, error: `Challenge is not active (status: ${challenge.status}).` };
   }
 
   if (challenge.challengerId !== userId && challenge.opponentId !== userId) {
@@ -338,30 +377,36 @@ export async function submitChallengeRoundAttempt(params: {
     return { success: false, error: "Challenge round not found." };
   }
 
-  // 1. Verify solution server-side
+  // 1. Solution validation against canonical DB round solution
   const isValid = isGridCompleteAndValid(finalGrid);
   if (!isValid || finalGrid !== round.solutionGrid) {
     return { success: false, error: "Submitted solution is invalid." };
   }
 
-  const existingAttempt = await prisma.challengeAttempt.findUnique({
-    where: {
-      challenge_user_round_unique: {
-        challengeId,
-        userId,
-        roundNumber,
-      },
-    },
-  });
+  // 2. Check if attempt was already completed (immutable)
+  const existingAttempt = challenge.attempts.find((a) => a.roundNumber === roundNumber);
+  if (existingAttempt && existingAttempt.isCompleted) {
+    const evalResult = await evaluateChallengeCompletion(challengeId);
+    return { success: true, isComplete: evalResult.isComplete, winnerId: evalResult.winnerId };
+  }
 
   const now = new Date();
   const startTime = existingAttempt?.startedAt || now;
+
+  // 3. Time Attack deadline enforcement
+  if (challenge.mode === "time_attack") {
+    const firstAttempt = challenge.attempts.find((a) => a.roundNumber === 1);
+    const sessionStart = firstAttempt?.startedAt || startTime;
+    const deadlineMs = sessionStart.getTime() + (challenge.timeLimitMinutes || 15) * 60 * 1000 + 5000; // 5s grace
+    if (now.getTime() > deadlineMs) {
+      return { success: false, error: "Time Attack limit has expired." };
+    }
+  }
+
   const authoritativeElapsed = Math.max(1, Math.round((now.getTime() - startTime.getTime()) / 1000));
+  const isFlagged = authoritativeElapsed < 15; // Anti-cheat flag: solve faster than 15s
 
-  // Anti-cheat flag: solve faster than 15s is flagged
-  const isFlagged = authoritativeElapsed < 15;
-
-  // 3. Upsert attempt record
+  // 4. Upsert completed attempt record
   await prisma.challengeAttempt.upsert({
     where: {
       challenge_user_round_unique: {
@@ -412,7 +457,7 @@ export async function evaluateChallengeCompletion(challengeId: string) {
   });
 
   if (!challenge || challenge.status === "completed") {
-    return { isComplete: challenge?.status === "completed", winnerId: challenge?.winnerId };
+    return { isComplete: challenge?.status === "completed", winnerId: challenge?.winnerId, isTie: challenge?.isTie || false };
   }
 
   const u1 = challenge.challengerId;
@@ -494,14 +539,18 @@ export async function evaluateChallengeCompletion(challengeId: string) {
       isComplete = true;
       const totalTime1 = u1Attempts.reduce((acc, a) => acc + a.elapsedSeconds, 0);
       const totalTime2 = u2Attempts.reduce((acc, a) => acc + a.elapsedSeconds, 0);
+      const totalMistakes1 = u1Attempts.reduce((acc, a) => acc + a.mistakes, 0);
+      const totalMistakes2 = u2Attempts.reduce((acc, a) => acc + a.mistakes, 0);
 
       if (totalTime1 < totalTime2) winnerId = u1;
       else if (totalTime2 < totalTime1) winnerId = u2;
+      else if (totalMistakes1 < totalMistakes2) winnerId = u1;
+      else if (totalMistakes2 < totalMistakes1) winnerId = u2;
       else isTie = true;
     }
   }
 
-  // 4. TIME ATTACK (Derive count strictly from completed valid DB rounds)
+  // 4. TIME ATTACK
   if (mode === "time_attack") {
     const u1SolvedCount = u1Attempts.filter((a) => a.roundNumber >= 1).length;
     const u2SolvedCount = u2Attempts.filter((a) => a.roundNumber >= 1).length;
@@ -575,4 +624,3 @@ export async function evaluateChallengeCompletion(challengeId: string) {
 
   return { isComplete, winnerId, isTie };
 }
-

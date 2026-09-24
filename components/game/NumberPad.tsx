@@ -33,12 +33,13 @@ export function NumberPad({
     <div
       style={{
         width: "100%",
-        maxWidth: "var(--page-game, 500px)",
-        margin: "12px auto 0",
+        maxWidth: "min(calc(100vw - 28px), var(--board-max-size, 440px))",
+        margin: "8px auto 0",
         display: "flex",
         flexDirection: "column",
-        gap: "10px",
+        gap: "8px",
         fontFamily: "var(--font-doodle)",
+        boxSizing: "border-box",
       }}
     >
       {/* 1-9 Digits Row */}
@@ -46,7 +47,7 @@ export function NumberPad({
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(9, 1fr)",
-          gap: "4px",
+          gap: "3px",
           width: "100%",
         }}
       >
@@ -62,44 +63,17 @@ export function NumberPad({
               disabled={disabled || isCompleted}
               onClick={() => onNumberClick(num)}
               aria-label={`Enter number ${num}, ${remaining} remaining`}
+              className="numpad-btn"
               style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                height: "48px",
-                width: "100%",
                 backgroundColor: isCompleted ? "var(--bg-paper-alt)" : "var(--bg-paper)",
                 color: isCompleted ? "var(--ink-muted)" : "var(--ink-primary)",
-                borderStyle: "solid",
-                borderWidth: "10px",
-                borderImage: "url(/doodle/button.svg) 10 10 10 10 stretch stretch",
-                fontFamily: "var(--font-doodle)",
-                fontSize: "22px",
-                fontWeight: 600,
                 cursor: disabled || isCompleted ? "default" : "pointer",
-                touchAction: "manipulation",
-                userSelect: "none",
-                position: "relative",
-                padding: 0,
                 opacity: isCompleted ? 0.35 : 1,
-                lineHeight: 1,
-                boxSizing: "border-box",
               }}
             >
               <span style={{ textDecoration: isCompleted ? "line-through" : "none" }}>{num}</span>
               {!isCompleted && remaining > 0 && remaining < 9 && (
-                <span
-                  style={{
-                    position: "absolute",
-                    bottom: "1px",
-                    right: "3px",
-                    fontSize: "10px",
-                    color: "var(--ink-secondary)",
-                    lineHeight: 1,
-                    fontVariantNumeric: "tabular-nums",
-                  }}
-                >
+                <span className="count-badge">
                   {remaining}
                 </span>
               )}
@@ -113,7 +87,7 @@ export function NumberPad({
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(4, 1fr)",
-          gap: "6px",
+          gap: "5px",
           width: "100%",
         }}
       >
@@ -123,10 +97,10 @@ export function NumberPad({
           onClick={onPencilToggle}
           disabled={disabled}
           title="Toggle pencil notes mode (Key: M)"
-          style={{ minHeight: "40px", padding: "6px 2px" }}
+          style={{ minHeight: "38px", padding: "4px 2px", fontSize: "13px" }}
         >
           <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-            <DoodleIcon name="pencil" size={14} />
+            <DoodleIcon name="pencil" size={13} />
             <span>notes</span>
           </span>
         </DoodleButton>
@@ -137,10 +111,10 @@ export function NumberPad({
           onClick={onUndo}
           disabled={disabled || !canUndo}
           title="Undo last move (Ctrl+Z)"
-          style={{ minHeight: "40px", padding: "6px 2px", opacity: canUndo ? 1 : 0.4 }}
+          style={{ minHeight: "38px", padding: "4px 2px", fontSize: "13px", opacity: canUndo ? 1 : 0.4 }}
         >
           <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-            <DoodleIcon name="undo" size={14} />
+            <DoodleIcon name="undo" size={13} />
             <span>undo</span>
           </span>
         </DoodleButton>
@@ -151,10 +125,10 @@ export function NumberPad({
           onClick={onErase}
           disabled={disabled}
           title="Erase cell (Backspace / Delete)"
-          style={{ minHeight: "40px", padding: "6px 2px" }}
+          style={{ minHeight: "38px", padding: "4px 2px", fontSize: "13px" }}
         >
           <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-            <DoodleIcon name="erase" size={14} />
+            <DoodleIcon name="erase" size={13} />
             <span>erase</span>
           </span>
         </DoodleButton>
@@ -165,10 +139,10 @@ export function NumberPad({
           onClick={onHint}
           disabled={disabled}
           title="Reveal a hint (reduces XP)"
-          style={{ minHeight: "40px", padding: "6px 2px" }}
+          style={{ minHeight: "38px", padding: "4px 2px", fontSize: "13px" }}
         >
           <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-            <DoodleIcon name="hint" size={14} />
+            <DoodleIcon name="hint" size={13} />
             <span>hint</span>
           </span>
         </DoodleButton>

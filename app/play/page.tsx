@@ -32,7 +32,7 @@ export default function PlayPage() {
           if (data.activeSessions && data.activeSessions.length > 0) {
             // Find most recent incomplete play session (non-daily)
             const playSession = data.activeSessions.find(
-              (s: any) => !s.puzzleKey.startsWith("daily-") && !s.puzzleKey.startsWith("ch-")
+              (s: { puzzleKey?: string }) => s.puzzleKey && !s.puzzleKey.startsWith("daily-") && !s.puzzleKey.startsWith("ch-")
             );
             if (playSession) {
               setActiveSession(playSession);

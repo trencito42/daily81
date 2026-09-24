@@ -83,7 +83,7 @@ export function solveSudoku(gridInput: number[] | string, randomizeOrder: boolea
 
     for (let i = 0; i < CELL_COUNT; i++) {
       if (grid[i] === 0) {
-        let candidates = getCandidates(grid, i);
+        const candidates = getCandidates(grid, i);
         if (candidates.length === 0) {
           return false;
         }

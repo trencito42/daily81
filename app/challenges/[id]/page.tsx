@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, use } from "react";
+import React, { useState, useEffect, useCallback, use, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { SudokuBoard } from "@/components/game/SudokuBoard";
@@ -56,6 +56,8 @@ interface ChallengeDetails {
       mistakes: number;
       hintsUsed: number;
       isCompleted: boolean;
+      startedAt?: string;
+      completedAt?: string;
     }[];
   };
   isParticipant: boolean;
@@ -83,10 +85,10 @@ export default function ChallengeDetailPage({ params }: { params: Promise<{ id: 
   // Time Attack state
   const [timeAttackRemaining, setTimeAttackRemaining] = useState<number>(0);
   const [timeAttackSolvedCount, setTimeAttackSolvedCount] = useState<number>(0);
-  const [timeAttackTotalElapsed, setTimeAttackTotalElapsed] = useState<number>(0);
 
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const startedRoundRef = useRef<number | null>(null);
 
   const fetchChallenge = useCallback(async () => {
     try {
@@ -96,22 +98,31 @@ export default function ChallengeDetailPage({ params }: { params: Promise<{ id: 
         setError("Challenge not found.");
         return;
       }
+      if (res.status === 403) {
+        setError("Access denied. This is a private challenge between other players.");
+        return;
+      }
       if (res.ok) {
         const json = await res.json();
         setData(json);
 
-        // Initial setup for current round puzzle
         const c = json.challenge;
         const uid = json.currentUserId;
         const myAttempts = c.attempts.filter((a: { userId: string; isCompleted: boolean }) => a.userId === uid && a.isCompleted);
 
         if (c.mode === "time_attack") {
-          const myTimeAttackAttempt = c.attempts.find((a: { userId: string; roundNumber: number }) => a.userId === uid && a.roundNumber === 0);
-          if (myTimeAttackAttempt?.isCompleted) {
-            setTimeAttackSolvedCount(myTimeAttackAttempt.puzzlesSolved);
+          const myCompletedAttack = c.attempts.find((a: { userId: string; roundNumber: number }) => a.userId === uid && a.roundNumber === 0);
+          if (myCompletedAttack?.isCompleted) {
+            setTimeAttackSolvedCount(myCompletedAttack.puzzlesSolved);
           } else {
+            const firstAttempt = c.attempts.find((a: { userId: string; roundNumber: number }) => a.userId === uid && a.roundNumber === 1);
             const limitSecs = (c.timeLimitMinutes || 15) * 60;
-            setTimeAttackRemaining(limitSecs);
+            if (firstAttempt?.startedAt) {
+              const elapsedSinceStart = Math.floor((Date.now() - new Date(firstAttempt.startedAt).getTime()) / 1000);
+              setTimeAttackRemaining(Math.max(0, limitSecs - elapsedSinceStart));
+            } else {
+              setTimeAttackRemaining(limitSecs);
+            }
           }
         }
 
@@ -122,6 +133,13 @@ export default function ChallengeDetailPage({ params }: { params: Promise<{ id: 
         if (currentRound && (!myAttempts.some((a: { roundNumber: number }) => a.roundNumber === currentRound.roundNumber))) {
           setCurrentRoundIndex(currentRound.roundNumber - 1);
           setCells(parseGridString(currentRound.initialGrid));
+
+          // Set elapsed seconds from server start time if available
+          const existingAttempt = c.attempts.find((a: { userId: string; roundNumber: number }) => a.userId === uid && a.roundNumber === currentRound.roundNumber);
+          if (existingAttempt?.startedAt) {
+            const serverElapsed = Math.max(0, Math.floor((Date.now() - new Date(existingAttempt.startedAt).getTime()) / 1000));
+            setElapsedSeconds(serverElapsed);
+          }
         }
       } else {
         setError("Failed to load challenge.");
@@ -137,7 +155,50 @@ export default function ChallengeDetailPage({ params }: { params: Promise<{ id: 
     fetchChallenge();
   }, [fetchChallenge]);
 
-  // Solver Timer (Elapsed or Countdown for Time Attack)
+  // Ensure round is server-started when active
+  useEffect(() => {
+    if (!data || data.challenge.status !== "active") return;
+    const c = data.challenge;
+    const uid = data.currentUserId;
+    const roundNumber = currentRoundIndex + 1;
+
+    const myAttempt = c.attempts.find((a) => a.userId === uid && a.roundNumber === roundNumber);
+    if (!myAttempt && startedRoundRef.current !== roundNumber) {
+      startedRoundRef.current = roundNumber;
+      fetch(`/api/challenges/${challengeId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "start_round", roundNumber }),
+      }).then(async (res) => {
+        if (res.ok) {
+          const json = await res.json();
+          if (json.startedAt) {
+            const serverElapsed = Math.max(0, Math.floor((Date.now() - new Date(json.startedAt).getTime()) / 1000));
+            setElapsedSeconds(serverElapsed);
+          }
+        }
+      }).catch(() => {});
+    }
+  }, [data, currentRoundIndex, challengeId]);
+
+  const handleTimeAttackFinish = useCallback(async () => {
+    if (!data || submitting) return;
+    setSubmitting(true);
+    try {
+      await fetch(`/api/challenges/${challengeId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "time_attack_finish" }),
+      });
+      fetchChallenge();
+    } catch {
+      // Fallback
+    } finally {
+      setSubmitting(false);
+    }
+  }, [data, submitting, challengeId, fetchChallenge]);
+
+  // Timer Tick
   useEffect(() => {
     if (!data || data.challenge.status !== "active") return;
     const c = data.challenge;
@@ -155,43 +216,43 @@ export default function ChallengeDetailPage({ params }: { params: Promise<{ id: 
         setTimeAttackRemaining((prev) => {
           if (prev <= 1) {
             clearInterval(timer);
-            handleTimeAttackExpire();
+            handleTimeAttackFinish();
             return 0;
           }
           return prev - 1;
         });
-        setTimeAttackTotalElapsed((prev) => prev + 1);
       } else {
         setElapsedSeconds((prev) => prev + 1);
       }
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [data]);
+  }, [data, handleTimeAttackFinish]);
 
-  const handleTimeAttackExpire = async () => {
-    if (!data || submitting) return;
-    setSubmitting(true);
+  const handleRespond = async (action: "accept" | "decline" | "cancel") => {
     try {
-      await fetch(`/api/challenges/${challengeId}`, {
+      const res = await fetch(`/api/challenges/${challengeId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "complete_time_attack",
-          puzzlesSolved: timeAttackSolvedCount,
-          elapsedSeconds: (data.challenge.timeLimitMinutes || 15) * 60,
-        }),
+        body: JSON.stringify({ action: "respond", responseAction: action }),
       });
-      fetchChallenge();
+      if (res.ok) {
+        if (action === "decline" || action === "cancel") {
+          router.push("/challenges");
+        } else {
+          fetchChallenge();
+        }
+      } else {
+        const err = await res.json();
+        setFeedback(err.error || "Failed to respond to challenge.");
+      }
     } catch {
-      // Fallback
-    } finally {
-      setSubmitting(false);
+      setFeedback("Network error.");
     }
   };
 
   const handleNumberInput = (num: number) => {
-    if (selectedIndex === null || cells.length !== 81) return;
+    if (selectedIndex === null || cells.length !== 81 || submitting) return;
     const cell = cells[selectedIndex];
     if (cell.given) return;
 
@@ -225,7 +286,7 @@ export default function ChallengeDetailPage({ params }: { params: Promise<{ id: 
   };
 
   const handleErase = () => {
-    if (selectedIndex === null || cells.length !== 81) return;
+    if (selectedIndex === null || cells.length !== 81 || submitting) return;
     const cell = cells[selectedIndex];
     if (cell.given || cell.value === 0) return;
 
@@ -236,7 +297,7 @@ export default function ChallengeDetailPage({ params }: { params: Promise<{ id: 
   };
 
   const handleUndo = () => {
-    if (history.length === 0) return;
+    if (history.length === 0 || submitting) return;
     const last = history[history.length - 1];
     setHistory((prev) => prev.slice(0, -1));
     setCells((prev) =>
@@ -249,43 +310,53 @@ export default function ChallengeDetailPage({ params }: { params: Promise<{ id: 
     setSubmitting(true);
     const c = data.challenge;
     const roundNumber = currentRoundIndex + 1;
+    const finalGrid = stringifyGrid(solvedCells);
 
     try {
-      if (c.mode === "time_attack") {
-        const nextSolved = timeAttackSolvedCount + 1;
-        setTimeAttackSolvedCount(nextSolved);
-
-        // Load next round puzzle in time attack sequence
-        const nextRound = c.rounds[roundNumber];
-        if (nextRound) {
-          setCurrentRoundIndex(roundNumber);
-          setCells(parseGridString(nextRound.initialGrid));
-          setSelectedIndex(null);
-          setHistory([]);
-          setSubmitting(false);
-          return;
-        }
-      }
-
       const res = await fetch(`/api/challenges/${challengeId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          action: "submit_round",
+          action: "submit_attempt",
           roundNumber,
-          elapsedSeconds,
+          finalGrid,
           mistakes,
+          hintsUsed: 0,
         }),
       });
 
       if (res.ok) {
+        if (c.mode === "time_attack") {
+          const nextSolved = timeAttackSolvedCount + 1;
+          setTimeAttackSolvedCount(nextSolved);
+
+          const nextRound = c.rounds[roundNumber];
+          if (nextRound && timeAttackRemaining > 0) {
+            setCurrentRoundIndex(roundNumber);
+            setCells(parseGridString(nextRound.initialGrid));
+            setSelectedIndex(null);
+            setHistory([]);
+            startedRoundRef.current = null;
+            setSubmitting(false);
+            return;
+          } else {
+            // End of pre-generated rounds or time expired
+            await handleTimeAttackFinish();
+            return;
+          }
+        }
+
         setElapsedSeconds(0);
         setMistakes(0);
         setHistory([]);
+        startedRoundRef.current = null;
         fetchChallenge();
+      } else {
+        const json = await res.json();
+        setFeedback(json.error || "Attempt submission failed.");
       }
     } catch {
-      // Fallback
+      setFeedback("Network error. Could not submit attempt.");
     } finally {
       setSubmitting(false);
     }
@@ -300,7 +371,7 @@ export default function ChallengeDetailPage({ params }: { params: Promise<{ id: 
   if (loading) {
     return (
       <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--ink-secondary)", fontFamily: "var(--font-doodle)" }}>
-        <span>loading challenge arena...</span>
+        <span>opening challenge arena...</span>
       </div>
     );
   }
@@ -345,6 +416,7 @@ export default function ChallengeDetailPage({ params }: { params: Promise<{ id: 
     : myAttempts.length >= totalRoundsExpected;
 
   const isCompleted = challenge.status === "completed";
+  const isPending = challenge.status === "pending";
 
   return (
     <div
@@ -397,27 +469,71 @@ export default function ChallengeDetailPage({ params }: { params: Promise<{ id: 
         </div>
 
         <div style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
-          {challenge.mode === "time_attack" ? (
-            <div>
-              <span style={{ fontSize: "18px", fontWeight: 700, color: timeAttackRemaining < 60 ? "var(--error-ink)" : "var(--ink-primary)" }}>
-                {formatTime(timeAttackRemaining)}
-              </span>
-              <div style={{ fontSize: "11px", color: "var(--ink-secondary)" }}>
-                {timeAttackSolvedCount} solved
-              </div>
-            </div>
-          ) : (
-            <div>
-              <span style={{ fontSize: "16px", fontWeight: 600 }}>{formatTime(elapsedSeconds)}</span>
-              {totalRoundsExpected > 1 && (
+          {challenge.status === "active" && (
+            challenge.mode === "time_attack" ? (
+              <div>
+                <span style={{ fontSize: "18px", fontWeight: 700, color: timeAttackRemaining < 60 ? "var(--error-ink)" : "var(--ink-primary)" }}>
+                  {formatTime(timeAttackRemaining)}
+                </span>
                 <div style={{ fontSize: "11px", color: "var(--ink-secondary)" }}>
-                  round {currentRoundIndex + 1}/{totalRoundsExpected}
+                  {timeAttackSolvedCount} solved
                 </div>
-              )}
-            </div>
+              </div>
+            ) : (
+              <div>
+                <span style={{ fontSize: "16px", fontWeight: 600 }}>{formatTime(elapsedSeconds)}</span>
+                {totalRoundsExpected > 1 && (
+                  <div style={{ fontSize: "11px", color: "var(--ink-secondary)" }}>
+                    round {currentRoundIndex + 1}/{totalRoundsExpected}
+                  </div>
+                )}
+              </div>
+            )
+          )}
+          {isPending && (
+            <DoodleBadge variant="muted" size="sm">
+              pending invite
+            </DoodleBadge>
           )}
         </div>
       </DoodlePanel>
+
+      {/* STATUS 0: PENDING INVITATION */}
+      {isPending && (
+        <DoodlePanel variant="default" tape="yellow" padding="lg" style={{ textAlign: "center", marginBottom: "20px" }}>
+          {isChallenger ? (
+            <div>
+              <h2 style={{ fontSize: "19px", fontWeight: 600, marginBottom: "8px" }}>
+                waiting for {opponent.displayName} to accept
+              </h2>
+              <p style={{ fontSize: "14px", color: "var(--ink-secondary)", lineHeight: 1.5, marginBottom: "16px" }}>
+                The match will begin as soon as {opponent.displayName} accepts your invitation.
+              </p>
+              <DoodleButton size="sm" variant="ghost" onClick={() => handleRespond("cancel")}>
+                cancel challenge
+              </DoodleButton>
+            </div>
+          ) : (
+            <div>
+              <h2 style={{ fontSize: "19px", fontWeight: 600, marginBottom: "6px" }}>
+                {challenge.challenger.displayName} challenged you!
+              </h2>
+              <div style={{ fontSize: "13px", color: "var(--ink-secondary)", marginBottom: "12px" }}>
+                {challenge.mode.replace(/_/g, " ")} · {challenge.difficulty}
+                {challenge.note && ` · "${challenge.note}"`}
+              </div>
+              <div style={{ display: "flex", gap: "8px", justifyContent: "center" }}>
+                <DoodleButton size="sm" variant="primary" onClick={() => handleRespond("accept")}>
+                  accept & play
+                </DoodleButton>
+                <DoodleButton size="sm" variant="secondary" onClick={() => handleRespond("decline")}>
+                  decline
+                </DoodleButton>
+              </div>
+            </div>
+          )}
+        </DoodlePanel>
+      )}
 
       {/* STATUS 1: COMPLETED RESULTS CARD */}
       {isCompleted && (
@@ -439,7 +555,7 @@ export default function ChallengeDetailPage({ params }: { params: Promise<{ id: 
                 : `${opponent.displayName} won the challenge.`}
             </h2>
             <div style={{ fontSize: "13px", color: "var(--ink-secondary)", marginTop: "4px" }}>
-              {challenge.winnerId === currentUserId ? "+20 XP awarded" : "+10 XP completion bonus"}
+              {challenge.winnerId === currentUserId ? "+25 XP awarded" : "+10 XP completion bonus"}
             </div>
           </div>
 
@@ -498,7 +614,7 @@ export default function ChallengeDetailPage({ params }: { params: Promise<{ id: 
       )}
 
       {/* STATUS 2: WAITING FOR OPPONENT */}
-      {!isCompleted && myFinished && (
+      {!isCompleted && !isPending && myFinished && (
         <DoodleEmptyState
           icon="check"
           title="puzzle solved!"
@@ -509,7 +625,7 @@ export default function ChallengeDetailPage({ params }: { params: Promise<{ id: 
       )}
 
       {/* STATUS 3: ACTIVE PLAYING BOARD */}
-      {!isCompleted && !myFinished && cells.length === 81 && (
+      {!isCompleted && !isPending && !myFinished && cells.length === 81 && (
         <div>
           {/* Sudoku 9x9 Board */}
           <SudokuBoard
@@ -521,7 +637,7 @@ export default function ChallengeDetailPage({ params }: { params: Promise<{ id: 
           />
 
           {/* Keypad */}
-          <div style={{ width: "100%", maxWidth: "var(--page-game, 500px)", margin: "12px auto 0", display: "flex", flexDirection: "column", gap: "10px" }}>
+          <div style={{ width: "100%", maxWidth: "var(--page-game, 460px)", margin: "10px auto 0", display: "flex", flexDirection: "column", gap: "8px" }}>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(9, 1fr)", gap: "4px", width: "100%" }}>
               {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
                 <button
@@ -569,7 +685,7 @@ export default function ChallengeDetailPage({ params }: { params: Promise<{ id: 
             </div>
           </div>
 
-          <div style={{ textAlign: "center", marginTop: "12px", fontSize: "12px", color: "var(--ink-secondary)" }}>
+          <div style={{ textAlign: "center", marginTop: "10px", fontSize: "12px", color: "var(--ink-secondary)" }}>
             competitive run · hints disabled
           </div>
         </div>

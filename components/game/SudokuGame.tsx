@@ -33,7 +33,7 @@ import { DoodleIcon } from "../doodle/DoodleIcon";
 
 const IS_DEV = process.env.NODE_ENV !== "production";
 
-function logSync(...args: any[]) {
+function logSync(...args: unknown[]) {
   if (IS_DEV) {
     console.log("[daily81 sync]", ...args);
   }
@@ -1179,9 +1179,9 @@ export function SudokuGame({
           flexDirection: "column",
           alignItems: "center",
           width: "100%",
-          maxWidth: "440px",
+          maxWidth: "var(--page-game, 460px)",
           margin: "0 auto",
-          padding: "8px 12px 24px",
+          padding: "4px 12px 20px",
           boxSizing: "border-box",
         }}
       >
@@ -1222,9 +1222,9 @@ export function SudokuGame({
           flexDirection: "column",
           alignItems: "center",
           width: "100%",
-          maxWidth: "440px",
+          maxWidth: "var(--page-game, 460px)",
           margin: "0 auto",
-          padding: "8px 12px 24px",
+          padding: "4px 12px 20px",
           boxSizing: "border-box",
         }}
       >
@@ -1262,9 +1262,9 @@ export function SudokuGame({
         flexDirection: "column",
         alignItems: "center",
         width: "100%",
-        maxWidth: "var(--page-game, 500px)",
+        maxWidth: "var(--page-game, 460px)",
         margin: "0 auto",
-        padding: "8px 12px 24px",
+        padding: "4px 12px 20px",
         boxSizing: "border-box",
       }}
     >
@@ -1280,7 +1280,7 @@ export function SudokuGame({
         syncStatus={practiceMode ? null : syncStatus}
       />
 
-      <div style={{ position: "relative", width: "100%", maxWidth: "var(--page-game, 500px)" }}>
+      <div style={{ position: "relative", width: "100%", maxWidth: "min(calc(100vw - 28px), var(--board-max-size, 440px))" }}>
         <SudokuBoard
           cells={cells}
           selectedIndex={selectedIndex}

@@ -66,14 +66,14 @@ export default async function RootLayout({
         <footer
           style={{
             textAlign: "center",
-            padding: "16px",
+            padding: "12px 16px max(16px, env(safe-area-inset-bottom))",
             fontSize: "12px",
             color: "var(--ink-secondary)",
             fontFamily: "var(--font-doodle)",
             userSelect: "none",
           }}
         >
-          daily81.com • interactive math notebook
+          daily81.com · interactive math notebook
         </footer>
       </body>
     </html>

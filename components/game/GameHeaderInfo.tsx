@@ -40,27 +40,41 @@ export function GameHeaderInfo({
     <div
       style={{
         width: "100%",
-        maxWidth: "var(--page-game, 500px)",
-        margin: "0 auto 10px",
+        maxWidth: "min(calc(100vw - 28px), var(--board-max-size, 440px))",
+        margin: "0 auto 6px",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         textAlign: "center",
         fontFamily: "var(--font-doodle)",
+        boxSizing: "border-box",
       }}
     >
       {/* Title */}
       <h1
         style={{
-          fontSize: "24px",
+          fontSize: "21px",
           fontWeight: 600,
           color: "var(--ink-primary)",
           letterSpacing: "-0.2px",
           marginBottom: "2px",
-          lineHeight: 1.2,
+          lineHeight: 1.15,
         }}
       >
-        {title || (dateStr ? "daily sudoku" : "sudoku")}
+        {title ? (
+          title.includes("(practice)") ? (
+            <>
+              {title.replace("(practice)", "").trim()}
+              <span style={{ fontSize: "15px", color: "var(--ink-secondary)", fontWeight: 400 }}> (practice)</span>
+            </>
+          ) : (
+            title
+          )
+        ) : dateStr ? (
+          "daily sudoku"
+        ) : (
+          "sudoku"
+        )}
       </h1>
 
       {/* Date & Metadata */}
@@ -68,10 +82,12 @@ export function GameHeaderInfo({
         style={{
           display: "flex",
           alignItems: "center",
-          gap: "6px",
-          fontSize: "14px",
+          justifyContent: "center",
+          gap: "5px",
+          fontSize: "13px",
           color: "var(--ink-secondary)",
-          marginBottom: "8px",
+          marginBottom: "6px",
+          flexWrap: "wrap",
         }}
       >
         {dateStr && <span>{formatNotebookDate(dateStr)}</span>}
@@ -83,23 +99,24 @@ export function GameHeaderInfo({
           <>
             <span>·</span>
             <span style={{ color: "var(--ink-primary)", display: "inline-flex", alignItems: "center", gap: "3px" }}>
-              <DoodleIcon name="streak" size={13} />
+              <DoodleIcon name="streak" size={12} />
               {streak} day streak
             </span>
           </>
         )}
       </div>
 
-      {/* Timer & Mistakes Bar */}
+      {/* Timer & Mistakes Bar (Aligned to board width) */}
       <div
         style={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
           width: "100%",
-          padding: "0 4px",
-          fontSize: "14px",
+          padding: "0 2px",
+          fontSize: "13px",
           color: "var(--ink-secondary)",
+          minHeight: "26px",
         }}
       >
         {showTimer ? (
@@ -109,13 +126,13 @@ export function GameHeaderInfo({
             style={{
               display: "inline-flex",
               alignItems: "center",
-              gap: "6px",
+              gap: "5px",
               background: "none",
               border: "1px dashed var(--border-subtle)",
               borderRadius: "4px",
-              padding: "3px 8px",
+              padding: "2px 7px",
               fontFamily: "var(--font-doodle)",
-              fontSize: "14px",
+              fontSize: "13px",
               color: "var(--ink-primary)",
               cursor: "pointer",
               userSelect: "none",
@@ -123,9 +140,9 @@ export function GameHeaderInfo({
             }}
             aria-label={isPaused ? "Resume game" : "Pause game"}
           >
-            <DoodleIcon name={isPaused ? "play" : "clock"} size={14} />
+            <DoodleIcon name={isPaused ? "play" : "clock"} size={13} />
             <span>{timeFormatted}</span>
-            {isPaused && <span style={{ fontSize: "12px", color: "var(--ink-secondary)" }}>(paused)</span>}
+            {isPaused && <span style={{ fontSize: "11px", color: "var(--ink-secondary)" }}>(paused)</span>}
           </button>
         ) : (
           <div />
@@ -136,14 +153,14 @@ export function GameHeaderInfo({
             style={{
               display: "flex",
               alignItems: "center",
-              gap: "8px",
-              fontSize: "14px",
+              gap: "6px",
+              fontSize: "13px",
             }}
           >
             {syncStatus && (
               <span
                 style={{
-                  fontSize: "12px",
+                  fontSize: "11px",
                   color: syncStatus === "offline" ? "var(--ink-muted)" : "var(--ink-secondary)",
                   opacity: 0.85,
                 }}

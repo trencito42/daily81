@@ -5,7 +5,47 @@ import { getPuzzleByKey } from "@/lib/puzzles/puzzleService";
 
 export const dynamic = "force-dynamic";
 
-async function formatProgress(session: any, puzzleKey: string, puzzle?: any) {
+interface ProgressSessionInput {
+  id?: string | null;
+  notesData?: string | null;
+  puzzleKey?: string | null;
+  date?: string | null;
+  difficulty?: string | null;
+  currentGrid?: string | null;
+  elapsedSeconds?: number | null;
+  mistakes?: number | null;
+  hintsUsed?: number | null;
+  isStarted?: boolean | null;
+  startedAt?: Date | null;
+  completed?: boolean | null;
+  completedAt?: Date | null;
+  version?: number | null;
+  xpAwarded?: number | null;
+  updatedAt?: Date | null;
+  [key: string]: unknown;
+}
+
+interface ProgressPuzzleInput {
+  date?: string | null;
+  difficulty?: string | null;
+}
+
+async function formatProgress(session: ProgressSessionInput | null | undefined, puzzleKey: string, puzzle?: ProgressPuzzleInput | null) {
+  if (!session) {
+    return {
+      puzzleKey,
+      currentGrid: "",
+      notes: {},
+      elapsedSeconds: 0,
+      mistakes: 0,
+      hintsUsed: 0,
+      isStarted: false,
+      completed: false,
+      completedAt: null,
+      version: 1,
+      xpAwarded: 0,
+    };
+  }
   let parsedNotes = {};
   if (session.notesData) {
     try {

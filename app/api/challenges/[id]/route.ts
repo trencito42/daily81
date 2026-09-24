@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import {
   respondChallenge,
+  startChallengeRound,
   submitChallengeRoundAttempt,
   evaluateChallengeCompletion,
 } from "@/lib/challenges/challengeEngine";
@@ -17,6 +18,10 @@ export async function GET(req: Request, { params }: RouteParams) {
   const resolvedParams = await params;
   const challengeId = resolvedParams.id;
   const session = await getSession(req);
+
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   try {
     const challenge = await prisma.challenge.findUnique({
@@ -59,7 +64,14 @@ export async function GET(req: Request, { params }: RouteParams) {
       return NextResponse.json({ error: "Challenge not found" }, { status: 404 });
     }
 
-    // Check expiration
+    const currentUserId = session.id;
+    const isParticipant = currentUserId === challenge.challengerId || currentUserId === challenge.opponentId;
+
+    if (!isParticipant) {
+      return NextResponse.json({ error: "Access denied. Private challenge." }, { status: 403 });
+    }
+
+    // Check expiration and persist if expired
     if ((challenge.status === "pending" || challenge.status === "active") && challenge.expiresAt < new Date()) {
       await prisma.challenge.update({
         where: { id: challengeId },
@@ -67,9 +79,6 @@ export async function GET(req: Request, { params }: RouteParams) {
       });
       challenge.status = "expired";
     }
-
-    const currentUserId = session?.id || null;
-    const isParticipant = currentUserId === challenge.challengerId || currentUserId === challenge.opponentId;
 
     return NextResponse.json({
       challenge,
@@ -108,7 +117,6 @@ export async function POST(req: Request, { params }: RouteParams) {
     // 2. Start Round (records server start time)
     if (action === "start_round") {
       const { roundNumber } = body;
-      const { startChallengeRound } = await import("@/lib/challenges/challengeEngine");
       const res = await startChallengeRound({
         challengeId,
         userId: session.id,
@@ -117,7 +125,7 @@ export async function POST(req: Request, { params }: RouteParams) {
       if (!res.success) {
         return NextResponse.json({ error: res.error }, { status: 400 });
       }
-      return NextResponse.json({ success: true, startedAt: res.startedAt });
+      return NextResponse.json({ success: true, startedAt: res.startedAt, isCompleted: res.isCompleted });
     }
 
     // 3. Submit Round Attempt
@@ -125,7 +133,7 @@ export async function POST(req: Request, { params }: RouteParams) {
       const { roundNumber, finalGrid, mistakes, hintsUsed } = body;
 
       if (!finalGrid || typeof roundNumber !== "number") {
-        return NextResponse.json({ error: "Invalid attempt data" }, { status: 400 });
+        return NextResponse.json({ error: "Invalid attempt data: finalGrid and roundNumber are required" }, { status: 400 });
       }
 
       const res = await submitChallengeRoundAttempt({
@@ -192,7 +200,12 @@ export async function POST(req: Request, { params }: RouteParams) {
       });
 
       const evalResult = await evaluateChallengeCompletion(challengeId);
-      return NextResponse.json({ success: true, isComplete: evalResult.isComplete, winnerId: evalResult.winnerId, puzzlesSolved: solvedCount });
+      return NextResponse.json({
+        success: true,
+        isComplete: evalResult.isComplete,
+        winnerId: evalResult.winnerId,
+        puzzlesSolved: solvedCount,
+      });
     }
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });

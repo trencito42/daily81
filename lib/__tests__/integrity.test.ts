@@ -63,7 +63,7 @@ describe("Puzzle Security & Solution Secrecy", () => {
       seed: serverPuzzle.seed || "seed",
     });
 
-    expect((publicPuzzle as any).solutionGrid).toBeUndefined();
+    expect("solutionGrid" in publicPuzzle).toBe(false);
     expect(publicPuzzle.puzzleKey).toBe("daily-2026-09-24");
     expect(publicPuzzle.initialGrid.length).toBe(81);
     expect(publicPuzzle.givensCount).toBeGreaterThan(0);

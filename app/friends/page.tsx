@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { DoodleTabs } from "@/components/doodle/DoodleTabs";
 import { DoodleButton } from "@/components/doodle/DoodleButton";
 import { DoodleInput } from "@/components/doodle/DoodleInput";
@@ -78,7 +77,6 @@ interface SearchUserResult {
 }
 
 export default function FriendsPage() {
-  const router = useRouter();
   const [activeTab, setActiveTab] = useState<"friends" | "requests" | "find" | "activity">("friends");
   const [loading, setLoading] = useState(true);
   const [authenticated, setAuthenticated] = useState(true);
@@ -297,7 +295,7 @@ export default function FriendsPage() {
           activeTab={activeTab}
           size="sm"
           onChange={(id) => {
-            setActiveTab(id as any);
+            setActiveTab(id as "friends" | "requests" | "find" | "activity");
             setActionFeedback(null);
           }}
         />
@@ -375,7 +373,7 @@ export default function FriendsPage() {
                     <DoodleButton
                       size="sm"
                       variant="primary"
-                      href={`/challenges?to=${encodeURIComponent(item.user.username)}`}
+                      href={`/challenges?opponent=${encodeURIComponent(item.user.username)}`}
                       icon="swords"
                     >
                       challenge

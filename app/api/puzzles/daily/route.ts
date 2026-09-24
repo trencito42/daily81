@@ -16,9 +16,10 @@ export async function GET(req: Request) {
 
     const { publicPuzzle } = await getOrCreateDailyPuzzle(dateParam);
     return NextResponse.json({ puzzle: publicPuzzle });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Daily puzzle error:", err);
-    const status = err.message?.includes("future") ? 400 : 500;
-    return NextResponse.json({ error: err.message || "Could not generate daily puzzle" }, { status });
+    const msg = err instanceof Error ? err.message : "Could not generate daily puzzle";
+    const status = msg.includes("future") ? 400 : 500;
+    return NextResponse.json({ error: msg }, { status });
   }
 }

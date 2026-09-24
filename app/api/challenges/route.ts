@@ -9,10 +9,22 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   const session = await getSession(req);
   if (!session) {
-    return NextResponse.json({ authenticated: false, challenges: [] });
+    return NextResponse.json({ authenticated: false, challenges: [], currentUserId: null });
   }
 
   try {
+    const now = new Date();
+
+    // Persist expiration in database for pending/active challenges past their expiresAt
+    await prisma.challenge.updateMany({
+      where: {
+        OR: [{ challengerId: session.id }, { opponentId: session.id }],
+        status: { in: ["pending", "active"] },
+        expiresAt: { lt: now },
+      },
+      data: { status: "expired" },
+    });
+
     const challenges = await prisma.challenge.findMany({
       where: {
         OR: [{ challengerId: session.id }, { opponentId: session.id }],
@@ -40,18 +52,10 @@ export async function GET(req: Request) {
       take: 40,
     });
 
-    // Check expiration for any pending/active challenges
-    const now = new Date();
-    const updatedChallenges = challenges.map((c) => {
-      if ((c.status === "pending" || c.status === "active") && c.expiresAt < now) {
-        return { ...c, status: "expired" };
-      }
-      return c;
-    });
-
     return NextResponse.json({
       authenticated: true,
-      challenges: updatedChallenges,
+      currentUserId: session.id,
+      challenges,
     });
   } catch (err) {
     console.error("Get challenges error:", err);
@@ -105,16 +109,19 @@ export async function POST(req: Request) {
       opponentId: opponent.id,
       mode,
       difficulty,
-      timeLimitMinutes: timeLimitMinutes ? parseInt(timeLimitMinutes, 10) : undefined,
-      sprintCount: sprintCount ? parseInt(sprintCount, 10) : undefined,
-      note,
+      timeLimitMinutes: Number(timeLimitMinutes) || 15,
+      sprintCount: Number(sprintCount) || 3,
+      note: typeof note === "string" ? note.trim() : undefined,
     });
 
     if (!result.success) {
       return NextResponse.json({ error: result.error }, { status: 400 });
     }
 
-    return NextResponse.json({ success: true, challengeId: result.challengeId });
+    return NextResponse.json({
+      success: true,
+      challengeId: result.challengeId,
+    });
   } catch (err) {
     console.error("Create challenge error:", err);
     return NextResponse.json({ error: "Failed to create challenge" }, { status: 500 });
