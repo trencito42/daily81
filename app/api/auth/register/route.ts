@@ -54,30 +54,17 @@ export async function POST(req: Request) {
     const passwordHash = await hashPassword(password);
     const initialDisplayName = displayName ? String(displayName).trim() : userValidation.normalized;
 
-    // Merge guest progress if provided
-    let initialXP = 0;
-    let initialStreak = 0;
-    let initialLongestStreak = 0;
-    let initialLastDailyDate: string | null = null;
-
-    if (guestProfile && typeof guestProfile.xp === "number") {
-      initialXP = guestProfile.xp;
-      initialStreak = guestProfile.currentStreak || 0;
-      initialLongestStreak = guestProfile.longestStreak || 0;
-      initialLastDailyDate = guestProfile.lastDailyDate || null;
-    }
-
     const user = await prisma.user.create({
       data: {
         email: normalizedEmail,
         username: userValidation.normalized,
         passwordHash,
         displayName: initialDisplayName,
-        xp: initialXP,
-        level: getLevelFromXP(initialXP),
-        currentStreak: initialStreak,
-        longestStreak: initialLongestStreak,
-        lastDailyDate: initialLastDailyDate,
+        xp: 0,
+        level: 1,
+        currentStreak: 0,
+        longestStreak: 0,
+        lastDailyDate: null,
       },
     });
 

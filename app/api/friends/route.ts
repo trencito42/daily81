@@ -8,7 +8,13 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   const session = await getSession(req);
   if (!session) {
-    return NextResponse.json({ authenticated: false, friends: [], requests: { incoming: [], outgoing: [] } });
+    return NextResponse.json({
+      authenticated: false,
+      friends: [],
+      incomingRequests: [],
+      outgoingRequests: [],
+      requests: { incoming: [], outgoing: [] },
+    });
   }
 
   try {
@@ -21,6 +27,8 @@ export async function GET(req: Request) {
     return NextResponse.json({
       authenticated: true,
       friends,
+      incomingRequests: requests.incoming,
+      outgoingRequests: requests.outgoing,
       requests,
       activity,
     });

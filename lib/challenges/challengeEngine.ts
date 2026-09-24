@@ -4,6 +4,7 @@ import { isGridCompleteAndValid } from "@/lib/sudoku/validate";
 import { getTodayDateString } from "@/lib/daily/streak";
 import { Difficulty } from "@/lib/sudoku/types";
 import { isBlocked, areFriends } from "@/lib/friends/friends";
+import { awardXp } from "@/lib/xp/reward";
 
 export type ChallengeMode = "duel" | "best_of_3" | "time_attack" | "sprint" | "daily_duel";
 
@@ -361,8 +362,9 @@ export async function evaluateChallengeCompletion(challengeId: string) {
   const u1 = challenge.challengerId;
   const u2 = challenge.opponentId;
 
-  const u1Attempts = challenge.attempts.filter((a) => a.userId === u1);
-  const u2Attempts = challenge.attempts.filter((a) => a.userId === u2);
+  // Disqualify flagged runs from winning
+  const u1Attempts = challenge.attempts.filter((a) => a.userId === u1 && !a.isFlagged);
+  const u2Attempts = challenge.attempts.filter((a) => a.userId === u2 && !a.isFlagged);
 
   const mode = challenge.mode as ChallengeMode;
   let isComplete = false;
@@ -434,55 +436,49 @@ export async function evaluateChallengeCompletion(challengeId: string) {
     }
   }
 
-  // 4. TIME ATTACK
+  // 4. TIME ATTACK (Derive count strictly from completed DB rounds)
   if (mode === "time_attack") {
-    const a1 = challenge.attempts.find((a) => a.userId === u1 && a.roundNumber === 0);
-    const a2 = challenge.attempts.find((a) => a.userId === u2 && a.roundNumber === 0);
+    const u1SolvedCount = u1Attempts.filter((a) => a.roundNumber >= 1).length;
+    const u2SolvedCount = u2Attempts.filter((a) => a.roundNumber >= 1).length;
 
-    if (a1?.isCompleted && a2?.isCompleted) {
+    const u1Finished = challenge.attempts.some((a) => a.userId === u1 && a.roundNumber === 0);
+    const u2Finished = challenge.attempts.some((a) => a.userId === u2 && a.roundNumber === 0);
+
+    if (u1Finished && u2Finished) {
       isComplete = true;
-      if (a1.puzzlesSolved > a2.puzzlesSolved) winnerId = u1;
-      else if (a2.puzzlesSolved > a1.puzzlesSolved) winnerId = u2;
-      else if (a1.elapsedSeconds < a2.elapsedSeconds) winnerId = u1;
-      else if (a2.elapsedSeconds < a1.elapsedSeconds) winnerId = u2;
+      if (u1SolvedCount > u2SolvedCount) winnerId = u1;
+      else if (u2SolvedCount > u1SolvedCount) winnerId = u2;
       else isTie = true;
     }
   }
 
   if (isComplete) {
-    await prisma.$transaction([
-      prisma.challenge.update({
-        where: { id: challengeId },
-        data: {
-          status: "completed",
-          winnerId,
-          isTie,
-        },
+    await prisma.challenge.update({
+      where: { id: challengeId },
+      data: {
+        status: "completed",
+        winnerId,
+        isTie,
+      },
+    });
+
+    // Centrally award XP
+    const reward1 = winnerId === u1 ? 25 : 10;
+    const reward2 = winnerId === u2 ? 25 : 10;
+
+    await Promise.all([
+      awardXp({
+        userId: u1,
+        amount: reward1,
+        reason: "challenge_completion",
+        idempotencyKey: `challenge-${challengeId}-${u1}`,
       }),
-      // Modest XP rewards
-      prisma.user.update({
-        where: { id: u1 },
-        data: { xp: { increment: winnerId === u1 ? 20 : 10 } },
+      awardXp({
+        userId: u2,
+        amount: reward2,
+        reason: "challenge_completion",
+        idempotencyKey: `challenge-${challengeId}-${u2}`,
       }),
-      prisma.user.update({
-        where: { id: u2 },
-        data: { xp: { increment: winnerId === u2 ? 20 : 10 } },
-      }),
-      prisma.xpEvent.create({
-        data: {
-          userId: u1,
-          amount: winnerId === u1 ? 20 : 10,
-          reason: "challenge_completion",
-        },
-      }),
-      prisma.xpEvent.create({
-        data: {
-          userId: u2,
-          amount: winnerId === u2 ? 20 : 10,
-          reason: "challenge_completion",
-        },
-      }),
-      // Notification
       prisma.notification.create({
         data: {
           userId: u1,
@@ -514,3 +510,4 @@ export async function evaluateChallengeCompletion(challengeId: string) {
 
   return { isComplete, winnerId, isTie };
 }
+

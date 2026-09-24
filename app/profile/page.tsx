@@ -11,16 +11,17 @@ export default function ProfilePage() {
   const [user, setUser] = useState<{
     id: string;
     email: string;
+    username: string;
     displayName: string;
     xp: number;
     level: number;
     currentStreak: number;
     longestStreak: number;
+    solvedCount: number;
   } | null>(null);
 
   const [guestProfile, setGuestProfile] = useState(() => loadGuestProfile());
   const [loading, setLoading] = useState<boolean>(true);
-  const [mergeMessage, setMergeMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -52,26 +53,9 @@ export default function ProfilePage() {
     }
   };
 
-  const handleMergeGuest = async () => {
-    try {
-      const res = await fetch("/api/auth/merge-guest", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ guestProfile }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setUser(data.user);
-        setMergeMessage("local progress successfully merged!");
-      }
-    } catch {
-      setMergeMessage("failed to merge progress.");
-    }
-  };
-
   const currentXP = user ? user.xp : guestProfile.xp;
   const currentStreak = user ? user.currentStreak : guestProfile.currentStreak;
-  const solvedCount = user ? (guestProfile.stats?.totalSolved || 0) : guestProfile.stats.totalSolved;
+  const solvedCount = user ? (user.solvedCount || 0) : (guestProfile.stats?.totalSolved || 0);
 
   return (
     <div
@@ -97,7 +81,7 @@ export default function ProfilePage() {
 
       {user && (
         <div style={{ fontSize: "13px", color: "var(--ink-secondary)", marginBottom: "16px" }}>
-          {user.email}
+          @{user.username || "player"}
         </div>
       )}
 
@@ -142,22 +126,20 @@ export default function ProfilePage() {
       {/* Auth actions */}
       {user ? (
         <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-          {guestProfile.xp > 0 && (
-            <button
-              type="button"
-              onClick={handleMergeGuest}
-              className="doodle-button"
-              style={{ fontSize: "13px" }}
-            >
-              merge local guest xp (+{guestProfile.xp} xp)
-            </button>
-          )}
-
-          {mergeMessage && (
-            <div style={{ fontSize: "13px", color: "var(--success-ink)", fontFamily: "var(--font-doodle)" }}>
-              {mergeMessage}
-            </div>
-          )}
+          <div
+            style={{
+              padding: "12px",
+              background: "rgba(0,0,0,0.02)",
+              borderRadius: "4px",
+              fontSize: "12px",
+              color: "var(--ink-secondary)",
+              textAlign: "left",
+              marginBottom: "8px",
+            }}
+          >
+            <div style={{ fontWeight: 600, marginBottom: "4px", color: "var(--ink-primary)" }}>Account Details</div>
+            <div>Email: {user.email}</div>
+          </div>
 
           <button
             type="button"

@@ -50,15 +50,17 @@ export async function GET(req: Request) {
 
     // 1. DAILY LEADERBOARD
     if (type === "daily") {
-      // Find eligible completions (hintsUsed == 0, elapsedSeconds >= 15 for anti-exploit sanity)
+      // Find eligible completions (hintsUsed == 0, mistakes == 0, elapsedSeconds >= 15 for competitive integrity)
       const whereCondition: {
         date: string;
         hintsUsed: number;
+        mistakes: number;
         elapsedSeconds: { gte: number };
         userId?: { in: string[] };
       } = {
         date: dateParam,
         hintsUsed: 0,
+        mistakes: 0,
         elapsedSeconds: { gte: 15 },
       };
 
@@ -72,7 +74,6 @@ export async function GET(req: Request) {
           where: whereCondition,
           orderBy: [
             { elapsedSeconds: "asc" },
-            { mistakes: "asc" },
             { completedAt: "asc" },
           ],
           skip,
@@ -112,21 +113,17 @@ export async function GET(req: Request) {
           },
         });
 
-        if (userCompletion && userCompletion.hintsUsed === 0 && userCompletion.elapsedSeconds >= 15) {
+        if (userCompletion && userCompletion.hintsUsed === 0 && userCompletion.mistakes === 0 && userCompletion.elapsedSeconds >= 15) {
           const betterCount = await prisma.dailyCompletion.count({
             where: {
               date: dateParam,
               hintsUsed: 0,
+              mistakes: 0,
               elapsedSeconds: { gte: 15 },
               OR: [
                 { elapsedSeconds: { lt: userCompletion.elapsedSeconds } },
                 {
                   elapsedSeconds: userCompletion.elapsedSeconds,
-                  mistakes: { lt: userCompletion.mistakes },
-                },
-                {
-                  elapsedSeconds: userCompletion.elapsedSeconds,
-                  mistakes: userCompletion.mistakes,
                   completedAt: { lt: userCompletion.completedAt },
                 },
               ],

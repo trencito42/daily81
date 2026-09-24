@@ -27,7 +27,7 @@ export async function GET(req: Request) {
     }
 
     const completedSessions = user.sessions;
-    const totalSolved = completedSessions.length + user.dailyCompletions.length;
+    const totalSolved = completedSessions.length;
     let totalTimeSeconds = 0;
     let bestTimeSeconds = 0;
     let totalMistakes = 0;
@@ -51,16 +51,6 @@ export async function GET(req: Request) {
       if (difficultyCounts[diff] !== undefined) {
         difficultyCounts[diff] += 1;
       }
-    });
-
-    user.dailyCompletions.forEach((dc) => {
-      totalTimeSeconds += dc.elapsedSeconds;
-      totalMistakes += dc.mistakes;
-      totalHints += dc.hintsUsed;
-      if (bestTimeSeconds === 0 || (dc.elapsedSeconds > 0 && dc.elapsedSeconds < bestTimeSeconds)) {
-        bestTimeSeconds = dc.elapsedSeconds;
-      }
-      difficultyCounts.hard += 1;
     });
 
     const averageTimeSeconds = totalSolved > 0 ? Math.round(totalTimeSeconds / totalSolved) : 0;

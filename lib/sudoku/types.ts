@@ -34,6 +34,7 @@ export interface SudokuMove {
   newValue: number;
   prevNotes: number[];
   newNotes: number[];
+  removedPeerNotes?: { index: number; notes: number[] }[];
   timestamp: number;
 }
 

@@ -73,13 +73,17 @@ model GameSession {
   id             String    @id @default(cuid())
   userId         String?   @map("user_id")
   puzzleId       String    @map("puzzle_id")
+  puzzleKey      String?   @map("puzzle_key") @db.VarChar(100)
   currentGrid    String    @map("current_grid") @db.VarChar(81)
   notesData      String?   @map("notes_data") @db.Text
   elapsedSeconds Int       @default(0) @map("elapsed_seconds")
   mistakes       Int       @default(0)
   hintsUsed      Int       @default(0) @map("hints_used")
+  isStarted      Boolean   @default(false) @map("is_started")
+  startedAt      DateTime  @default(now()) @map("started_at")
   completed      Boolean   @default(false)
   completedAt    DateTime? @map("completed_at")
+  version        Int       @default(1)
   xpAwarded      Int       @default(0) @map("xp_awarded")
   createdAt      DateTime  @default(now()) @map("created_at")
   updatedAt      DateTime  @updatedAt @map("updated_at")
@@ -88,8 +92,11 @@ model GameSession {
   puzzle   Puzzle    @relation(fields: [puzzleId], references: [id], onDelete: Cascade)
   xpEvents XpEvent[]
 
+  @@unique([userId, puzzleId], name: "user_puzzle_session_unique")
   @@index([userId])
   @@index([puzzleId])
+  @@index([puzzleKey])
+  @@index([completed])
   @@map("game_sessions")
 }
 
@@ -115,12 +122,13 @@ model DailyCompletion {
 }
 
 model XpEvent {
-  id            String       @id @default(cuid())
-  userId        String       @map("user_id")
-  gameSessionId String?      @map("game_session_id")
-  amount        Int
-  reason        String       @db.VarChar(50)
-  createdAt     DateTime     @default(now()) @map("created_at")
+  id             String       @id @default(cuid())
+  userId         String       @map("user_id")
+  gameSessionId  String?      @map("game_session_id")
+  amount         Int
+  reason         String       @db.VarChar(50)
+  idempotencyKey String?      @unique @map("idempotency_key") @db.VarChar(100)
+  createdAt      DateTime     @default(now()) @map("created_at")
 
   user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   gameSession GameSession? @relation(fields: [gameSessionId], references: [id], onDelete: SetNull)

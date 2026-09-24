@@ -21,6 +21,7 @@ export async function GET(req: Request) {
       select: {
         id: true,
         email: true,
+        username: true,
         displayName: true,
         xp: true,
         level: true,
@@ -31,7 +32,23 @@ export async function GET(req: Request) {
       },
     });
 
-    return NextResponse.json({ user: user || null });
+    if (!user) {
+      return NextResponse.json({ user: null });
+    }
+
+    const solvedCount = await prisma.gameSession.count({
+      where: {
+        userId: user.id,
+        completed: true,
+      },
+    });
+
+    return NextResponse.json({
+      user: {
+        ...user,
+        solvedCount,
+      },
+    });
   } catch (err) {
     console.error("Fetch user error:", err);
     return NextResponse.json({ user: null });

@@ -86,7 +86,7 @@ export async function GET(req: Request, { params }: RouteParams) {
       const [completions, sessions] = await Promise.all([
         prisma.dailyCompletion.findMany({
           where: { userId: user.id },
-          select: { elapsedSeconds: true, mistakes: true, hintsUsed: true },
+          select: { id: true },
         }),
         prisma.gameSession.findMany({
           where: { userId: user.id, completed: true },
@@ -94,18 +94,10 @@ export async function GET(req: Request, { params }: RouteParams) {
         }),
       ]);
 
-      const totalSolved = completions.length + sessions.length;
+      const totalSolved = sessions.length;
       let totalTime = 0;
       let bestTime = 0;
       const difficultyCounts = { easy: 0, medium: 0, hard: 0, expert: 0 };
-
-      completions.forEach((c) => {
-        totalTime += c.elapsedSeconds;
-        if (bestTime === 0 || (c.elapsedSeconds > 0 && c.elapsedSeconds < bestTime)) {
-          bestTime = c.elapsedSeconds;
-        }
-        difficultyCounts.hard += 1;
-      });
 
       sessions.forEach((s) => {
         totalTime += s.elapsedSeconds;

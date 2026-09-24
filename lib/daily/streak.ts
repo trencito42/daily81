@@ -1,15 +1,16 @@
 /**
- * Normalizes date to YYYY-MM-DD string
+ * Canonical UTC calendar date string YYYY-MM-DD
  */
-export function getTodayDateString(offsetHours: number = 0): string {
-  const now = new Date();
-  if (offsetHours !== 0) {
-    now.setHours(now.getHours() + offsetHours);
-  }
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+export function getTodayDateString(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/**
+ * Checks if a date string is in the future compared to UTC today
+ */
+export function isFutureDate(dateStr: string): boolean {
+  const today = getTodayDateString();
+  return dateStr > today;
 }
 
 /**
@@ -18,8 +19,9 @@ export function getTodayDateString(offsetHours: number = 0): string {
 export function formatNotebookDate(dateStr: string): string {
   try {
     const [year, month, day] = dateStr.split("-").map(Number);
-    const date = new Date(year, month - 1, day);
+    const date = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
     return date.toLocaleDateString("en-US", {
+      timeZone: "UTC",
       month: "short",
       day: "numeric",
       year: "numeric",
@@ -27,6 +29,14 @@ export function formatNotebookDate(dateStr: string): string {
   } catch {
     return dateStr;
   }
+}
+
+/**
+ * Parses YYYY-MM-DD into UTC epoch days count for exact integer arithmetic
+ */
+export function dateStrToEpochDays(dateStr: string): number {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  return Math.floor(Date.UTC(year, month - 1, day) / 86400000);
 }
 
 /**
@@ -53,10 +63,9 @@ export function calculateNewStreak(
     };
   }
 
-  const lastDate = new Date(lastDailyDate);
-  const thisDate = new Date(completedDate);
-  const diffTime = thisDate.getTime() - lastDate.getTime();
-  const diffDays = Math.round(diffTime / (1000 * 3600 * 24));
+  const lastDays = dateStrToEpochDays(lastDailyDate);
+  const thisDays = dateStrToEpochDays(completedDate);
+  const diffDays = thisDays - lastDays;
 
   let newStreak: number;
   if (diffDays === 1) {
@@ -64,8 +73,11 @@ export function calculateNewStreak(
     newStreak = currentStreak + 1;
   } else if (diffDays === 0) {
     newStreak = currentStreak;
+  } else if (diffDays < 0) {
+    // Solving an archived past date doesn't increment or break the current streak
+    return { currentStreak, longestStreak, streakIncreased: false };
   } else {
-    // Streak broken, reset to 1
+    // Streak broken (gap of 2 or more days), reset to 1
     newStreak = 1;
   }
 

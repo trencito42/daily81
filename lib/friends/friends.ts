@@ -170,8 +170,15 @@ export async function sendFriendRequest(senderId: string, targetQuery: string) {
         where: { id: reversePending.id },
         data: { status: "accepted" },
       }),
-      prisma.friendship.create({
-        data: {
+      prisma.friendship.upsert({
+        where: {
+          canonical_friendship_unique: {
+            userId1: u1,
+            userId2: u2,
+          },
+        },
+        update: {},
+        create: {
           userId1: u1,
           userId2: u2,
         },
@@ -190,40 +197,54 @@ export async function sendFriendRequest(senderId: string, targetQuery: string) {
     return { success: true, acceptedImmediately: true };
   }
 
-  // Check if request already pending
-  const existing = await prisma.friendRequest.findFirst({
+  // Check if existing request row exists
+  const existing = await prisma.friendRequest.findUnique({
     where: {
-      senderId,
-      receiverId: targetUser.id,
-      status: "pending",
+      friend_request_pair_unique: {
+        senderId,
+        receiverId: targetUser.id,
+      },
     },
   });
 
   if (existing) {
-    return { success: false, error: "Friend request already pending." };
-  }
-
-  // Create friend request & in-app notification
-  const [senderUser] = await Promise.all([
-    prisma.user.findUnique({ where: { id: senderId }, select: { displayName: true, username: true } }),
-    prisma.friendRequest.create({
+    if (existing.status === "pending") {
+      return { success: false, error: "Friend request already pending." };
+    }
+    // Reactivate request if previously declined or cancelled
+    await prisma.friendRequest.update({
+      where: { id: existing.id },
+      data: { status: "pending" },
+    });
+  } else {
+    // Create new friend request
+    await prisma.friendRequest.create({
       data: {
         senderId,
         receiverId: targetUser.id,
         status: "pending",
       },
-    }),
-  ]);
+    });
+  }
 
-  await prisma.notification.create({
-    data: {
-      userId: targetUser.id,
-      type: "friend_request",
-      title: "new friend request",
-      message: `${senderUser?.displayName || "A player"} sent you a friend request.`,
-      link: "/friends",
-    },
+  const senderUser = await prisma.user.findUnique({
+    where: { id: senderId },
+    select: { displayName: true },
   });
+
+  try {
+    await prisma.notification.create({
+      data: {
+        userId: targetUser.id,
+        type: "friend_request",
+        title: "new friend request",
+        message: `${senderUser?.displayName || "A player"} sent you a friend request.`,
+        link: "/friends",
+      },
+    });
+  } catch {
+    // Non-blocking notification
+  }
 
   return { success: true, acceptedImmediately: false };
 }
@@ -430,5 +451,50 @@ export async function searchUsers(query: string, currentUserId?: string) {
     },
   });
 
-  return users;
+  if (!currentUserId || users.length === 0) {
+    return users.map((u) => ({
+      ...u,
+      isFriend: false,
+      hasPendingRequest: false,
+    }));
+  }
+
+  const userIds = users.map((u) => u.id);
+
+  // Check friendship status
+  const friendships = await prisma.friendship.findMany({
+    where: {
+      OR: [
+        { userId1: currentUserId, userId2: { in: userIds } },
+        { userId2: currentUserId, userId1: { in: userIds } },
+      ],
+    },
+  });
+
+  const friendIdSet = new Set<string>();
+  for (const f of friendships) {
+    friendIdSet.add(f.userId1 === currentUserId ? f.userId2 : f.userId1);
+  }
+
+  // Check pending friend requests
+  const pendingRequests = await prisma.friendRequest.findMany({
+    where: {
+      status: "pending",
+      OR: [
+        { senderId: currentUserId, receiverId: { in: userIds } },
+        { receiverId: currentUserId, senderId: { in: userIds } },
+      ],
+    },
+  });
+
+  const pendingIdSet = new Set<string>();
+  for (const r of pendingRequests) {
+    pendingIdSet.add(r.senderId === currentUserId ? r.receiverId : r.senderId);
+  }
+
+  return users.map((u) => ({
+    ...u,
+    isFriend: friendIdSet.has(u.id),
+    hasPendingRequest: pendingIdSet.has(u.id),
+  }));
 }
