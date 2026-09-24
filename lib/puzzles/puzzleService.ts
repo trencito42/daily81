@@ -10,7 +10,6 @@ export interface PublicPuzzle {
   date: string | null;
   difficulty: Difficulty;
   initialGrid: string;
-  seed: string;
   givensCount: number;
 }
 
@@ -20,7 +19,6 @@ export function toPublicPuzzle(puzzle: {
   date?: string | null;
   difficulty: string;
   initialGrid: string;
-  seed: string;
 }): PublicPuzzle {
   return {
     id: puzzle.id,
@@ -28,7 +26,6 @@ export function toPublicPuzzle(puzzle: {
     date: puzzle.date || null,
     difficulty: (puzzle.difficulty || "medium") as Difficulty,
     initialGrid: puzzle.initialGrid,
-    seed: puzzle.seed,
     givensCount: puzzle.initialGrid.split("").filter((c) => c !== "0").length,
   };
 }

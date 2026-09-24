@@ -86,9 +86,10 @@ describe("Daily Puzzle Date & Timezone Integrity", () => {
 });
 
 describe("Puzzle Security & Solution Secrecy", () => {
-  it("toPublicPuzzle strips solutionGrid completely", () => {
+  it("toPublicPuzzle strips solutionGrid and seed completely", () => {
     const serverPuzzle = generateDailySudoku("2026-09-24", "hard");
     expect(serverPuzzle.solutionGrid).toBeDefined();
+    expect(serverPuzzle.seed).toBeDefined();
 
     const publicPuzzle = toPublicPuzzle({
       id: "test-id",
@@ -96,10 +97,14 @@ describe("Puzzle Security & Solution Secrecy", () => {
       date: serverPuzzle.date,
       difficulty: serverPuzzle.difficulty,
       initialGrid: serverPuzzle.initialGrid,
-      seed: serverPuzzle.seed || "seed",
+      // seed intentionally NOT passed — toPublicPuzzle no longer accepts it
     });
 
-    expect("solutionGrid" in publicPuzzle).toBe(false);
+    // Critical: neither solutionGrid nor seed must appear in JSON serialization
+    const json = JSON.stringify(publicPuzzle);
+    expect(json).not.toContain("solutionGrid");
+    expect(json).not.toContain("seed");
+
     expect(publicPuzzle.puzzleKey).toBe("daily-2026-09-24");
     expect(publicPuzzle.initialGrid.length).toBe(81);
     expect(publicPuzzle.givensCount).toBeGreaterThan(0);

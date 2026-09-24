@@ -3,6 +3,10 @@ import { Difficulty, ServerSudokuPuzzle } from "./types";
 import { PRNG } from "./prng";
 import { countSolutions, solveSudoku } from "./solver";
 import { getIndex } from "./validate";
+import { createHmac } from "crypto";
+
+/** Current generator algorithm version. Increment when algorithm changes. */
+const GENERATOR_VERSION = 1;
 
 /**
  * Generates a full solved 9x9 Sudoku board deterministically using a PRNG
@@ -82,15 +86,28 @@ export function generateSudoku(difficulty: Difficulty, seedInput?: string, date?
 }
 
 /**
+ * Derives a non-reversible HMAC-SHA256 seed for the Daily puzzle.
+ * The raw DAILY_SEED_PEPPER NEVER enters the puzzle record, logs, or client.
+ * Only the hex digest is used as the PRNG seed.
+ */
+function deriveDailySeed(dateStr: string, pepper: string): string {
+  const message = `daily81:${dateStr}:v${GENERATOR_VERSION}`;
+  return createHmac("sha256", pepper).update(message).digest("hex");
+}
+
+/**
  * Generates the official Daily Sudoku for a specific YYYY-MM-DD date.
  * Deterministic for all players via server-side DAILY_SEED_PEPPER.
+ * Pepper is never stored or exposed — only the HMAC digest is used as seed.
  */
 export function generateDailySudoku(dateStr: string, difficulty: Difficulty = "hard"): ServerSudokuPuzzle {
   const pepper = process.env.DAILY_SEED_PEPPER;
   if (!pepper && process.env.NODE_ENV === "production") {
     throw new Error("DAILY_SEED_PEPPER environment variable is required in production");
   }
-  const seed = pepper ? `daily81-${dateStr}-${pepper}` : `daily81-${dateStr}`;
+  // Use HMAC digest as seed so pepper is never embedded in stored data
+  const seed = pepper
+    ? deriveDailySeed(dateStr, pepper)
+    : `daily81-fallback-dev-${dateStr}`;
   return generateSudoku(difficulty, seed, dateStr);
 }
-

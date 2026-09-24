@@ -4,6 +4,10 @@ import { verifyPassword } from "@/lib/auth/password";
 import { createSessionToken, setSessionCookie } from "@/lib/auth/session";
 import { checkRateLimit, getClientIp, rateLimitResponse } from "@/lib/security/rateLimit";
 
+// Precomputed dummy hash for constant-time comparison when user not found.
+// Prevents timing-based email enumeration.
+const DUMMY_HASH = "$2b$12$placeholder.hash.value.for.constant.time.comparison.xx";
+
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
@@ -37,12 +41,12 @@ export async function POST(req: Request) {
       where: { email: normalizedEmail },
     });
 
-    if (!user) {
-      return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
-    }
+    // Always perform bcrypt comparison regardless of whether user exists.
+    // This prevents timing-based email enumeration attacks.
+    const hashToCompare = user ? user.passwordHash : DUMMY_HASH;
+    const isValid = await verifyPassword(String(password), hashToCompare);
 
-    const isValid = await verifyPassword(String(password), user.passwordHash);
-    if (!isValid) {
+    if (!user || !isValid) {
       return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
     }
 

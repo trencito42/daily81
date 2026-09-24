@@ -17,16 +17,7 @@ export async function GET(req: Request) {
         completed: false,
       },
       include: {
-        puzzle: {
-          select: {
-            id: true,
-            puzzleKey: true,
-            date: true,
-            difficulty: true,
-            initialGrid: true,
-            seed: true,
-          },
-        },
+        puzzle: true,
       },
       orderBy: { updatedAt: "desc" },
       take: 5,
@@ -42,8 +33,8 @@ export async function GET(req: Request) {
           date: s.puzzle.date,
           difficulty: s.puzzle.difficulty,
           initialGrid: s.puzzle.initialGrid,
-          seed: s.puzzle.seed,
           givensCount: s.puzzle.initialGrid.split("").filter((c) => c !== "0").length,
+          // seed intentionally omitted — server only
         },
         elapsedSeconds: s.elapsedSeconds,
         mistakes: s.mistakes,

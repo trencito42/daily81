@@ -3,9 +3,9 @@ import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { isGridCompleteAndValid } from "@/lib/sudoku/validate";
 import { calculatePuzzleXP, getLevelFromXP } from "@/lib/xp/progression";
-import { calculateNewStreak, getTodayDateString, isFutureDate } from "@/lib/daily/streak";
+import { calculateNewStreak, isFutureDate } from "@/lib/daily/streak";
 import { Difficulty } from "@/lib/sudoku/types";
-import { getPuzzleByKey, getOrCreateDailyPuzzle } from "@/lib/puzzles/puzzleService";
+import { getPuzzleByKey } from "@/lib/puzzles/puzzleService";
 import { logUserActivity } from "@/lib/activity/activity";
 
 export const dynamic = "force-dynamic";
@@ -17,10 +17,8 @@ export async function POST(req: Request) {
 
     const {
       puzzleKey,
-      difficulty,
-      date,
-      isDaily,
       finalGrid,
+      // These are accepted for display convenience but NEVER used for authority:
       elapsedSeconds = 0,
       mistakes = 0,
       hintsUsed = 0,
@@ -30,58 +28,54 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid puzzle submission" }, { status: 400 });
     }
 
-    // 1. Validate grid completeness and validity
+    // 1. Validate grid completeness and Sudoku rules
     const isValid = isGridCompleteAndValid(finalGrid);
     if (!isValid) {
       return NextResponse.json({ error: "Grid solution is invalid or incomplete" }, { status: 400 });
     }
 
-    // 2. Fetch or resolve canonical puzzle
-    let puzzle = await getPuzzleByKey(puzzleKey);
-    if (!puzzle && isDaily && date) {
-      if (isFutureDate(date)) {
-        return NextResponse.json({ error: "Cannot submit future daily puzzle" }, { status: 400 });
-      }
-      const res = await getOrCreateDailyPuzzle(date);
-      puzzle = res.puzzle;
-    }
+    // 2. Fetch canonical puzzle by puzzleKey — NEVER create from client-supplied params
+    const puzzle = await getPuzzleByKey(puzzleKey);
 
     if (!puzzle) {
       return NextResponse.json({ error: "Canonical puzzle not found" }, { status: 404 });
     }
 
-    // 3. Verify submitted grid strictly matches the canonical solution
+    // 3. Verify submitted grid matches server's canonical solution
     if (puzzle.solutionGrid !== finalGrid) {
       return NextResponse.json({ error: "Submitted solution does not match canonical puzzle" }, { status: 400 });
     }
 
-    // Unauthenticated guest processing
+    // Derive ALL authoritative metadata from DB — never trust client fields
+    const canonicalIsDaily = puzzle.date !== null;
+    const canonicalDate = puzzle.date;
+    const canonicalDifficulty = (puzzle.difficulty || "medium") as Difficulty;
+
+    if (canonicalDate && isFutureDate(canonicalDate)) {
+      return NextResponse.json({ error: "Cannot submit future daily puzzle" }, { status: 400 });
+    }
+
+    // --- Guest path ---
     if (!session) {
       const xpBreakdown = calculatePuzzleXP({
-        difficulty: (puzzle.difficulty || difficulty || "medium") as Difficulty,
-        isDaily: Boolean(isDaily),
+        difficulty: canonicalDifficulty,
+        isDaily: canonicalIsDaily,
         mistakes: Number(mistakes) || 0,
         hintsUsed: Number(hintsUsed) || 0,
         elapsedSeconds: Number(elapsedSeconds) || 0,
         userCurrentXP: 0,
       });
 
-      return NextResponse.json({
-        success: true,
-        xpBreakdown,
-      });
+      return NextResponse.json({ success: true, xpBreakdown });
     }
 
-    // 4. Authenticated user processing
-    const user = await prisma.user.findUnique({
-      where: { id: session.id },
-    });
-
+    // --- Authenticated path ---
+    const user = await prisma.user.findUnique({ where: { id: session.id } });
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    // Require an existing GameSession (must have been started)
+    // Require an existing GameSession (must have been autosaved/started)
     const existingSession = await prisma.gameSession.findUnique({
       where: {
         user_puzzle_session_unique: {
@@ -95,16 +89,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Active game session not found for this puzzle" }, { status: 400 });
     }
 
-    const dailyDate = isDaily && date ? date : puzzle.date;
-    if (dailyDate && isFutureDate(dailyDate)) {
-      return NextResponse.json({ error: "Cannot submit future daily puzzle" }, { status: 400 });
-    }
-
-    // 5. IDEMPOTENT RETRY: If already completed, return original completion response
+    // IDEMPOTENT RETRY: already completed → return cached result
     if (existingSession.completed) {
       const xpBreakdown = calculatePuzzleXP({
-        difficulty: (puzzle.difficulty || difficulty || "medium") as Difficulty,
-        isDaily: Boolean(isDaily),
+        difficulty: canonicalDifficulty,
+        isDaily: canonicalIsDaily,
         mistakes: existingSession.mistakes,
         hintsUsed: existingSession.hintsUsed,
         elapsedSeconds: existingSession.elapsedSeconds,
@@ -130,19 +119,22 @@ export async function POST(req: Request) {
       });
     }
 
-    // 6. SINGLE ATOMIC TRANSACTION
-    const idempotencyKey = isDaily && dailyDate
-      ? `daily-${user.id}-${dailyDate}`
+    // Build idempotency key from canonical server values
+    const idempotencyKey = canonicalIsDaily && canonicalDate
+      ? `daily-${user.id}-${canonicalDate}`
       : `puzzle-${user.id}-${puzzle.id}`;
 
-    // Derive authoritative values
+    // Authoritative counters come from GameSession; elapsed is max(server, client) with sanity cap
     const authoritativeMistakes = existingSession.mistakes;
     const authoritativeHints = existingSession.hintsUsed;
-    const authoritativeElapsed = Math.max(existingSession.elapsedSeconds, Math.floor(Number(elapsedSeconds) || 0));
+    const authoritativeElapsed = Math.max(
+      existingSession.elapsedSeconds,
+      Math.min(864000, Math.floor(Number(elapsedSeconds) || 0))
+    );
 
     const xpBreakdown = calculatePuzzleXP({
-      difficulty: (puzzle.difficulty || difficulty || "medium") as Difficulty,
-      isDaily: Boolean(isDaily),
+      difficulty: canonicalDifficulty,
+      isDaily: canonicalIsDaily,
       mistakes: authoritativeMistakes,
       hintsUsed: authoritativeHints,
       elapsedSeconds: authoritativeElapsed,
@@ -154,7 +146,7 @@ export async function POST(req: Request) {
     const newLevel = getLevelFromXP(newTotalXP);
 
     const transactionResult = await prisma.$transaction(async (tx) => {
-      // 1. Mark GameSession completed
+      // 1. Mark GameSession completed (atomic)
       const sessionUpdated = await tx.gameSession.update({
         where: { id: existingSession.id },
         data: {
@@ -173,13 +165,13 @@ export async function POST(req: Request) {
       let updatedLongest = user.longestStreak;
       let updatedLastDaily = user.lastDailyDate;
 
-      // 2. Daily completion & streak
-      if (dailyDate) {
+      // 2. Daily completion & streak (only for canonical Daily puzzles)
+      if (canonicalIsDaily && canonicalDate) {
         const existingDaily = await tx.dailyCompletion.findUnique({
           where: {
             user_daily_unique: {
               userId: user.id,
-              date: dailyDate,
+              date: canonicalDate,
             },
           },
         });
@@ -189,7 +181,7 @@ export async function POST(req: Request) {
             data: {
               userId: user.id,
               puzzleId: puzzle.id,
-              date: dailyDate,
+              date: canonicalDate,
               elapsedSeconds: authoritativeElapsed,
               mistakes: authoritativeMistakes,
               hintsUsed: authoritativeHints,
@@ -201,15 +193,15 @@ export async function POST(req: Request) {
             user.currentStreak,
             user.longestStreak,
             user.lastDailyDate,
-            dailyDate
+            canonicalDate
           );
           updatedStreak = streakResult.currentStreak;
           updatedLongest = streakResult.longestStreak;
-          updatedLastDaily = dailyDate;
+          updatedLastDaily = canonicalDate;
         }
       }
 
-      // 3. Record XpEvent with idempotencyKey
+      // 3. XP event with idempotency key (upsert is safe for retries)
       await tx.xpEvent.upsert({
         where: { idempotencyKey },
         update: {},
@@ -217,12 +209,12 @@ export async function POST(req: Request) {
           userId: user.id,
           gameSessionId: existingSession.id,
           amount: xpAmount,
-          reason: isDaily ? "daily_completion" : "puzzle_completion",
+          reason: canonicalIsDaily ? "daily_completion" : "puzzle_completion",
           idempotencyKey,
         },
       });
 
-      // 4. Update user xp, level, and streak in single commit
+      // 4. Update user XP, level, and streak atomically
       const updatedUser = await tx.user.update({
         where: { id: user.id },
         data: {
@@ -234,16 +226,13 @@ export async function POST(req: Request) {
         },
       });
 
-      return {
-        sessionUpdated,
-        updatedUser,
-      };
+      return { sessionUpdated, updatedUser };
     });
 
-    // Post-transaction non-critical activity log
-    if (dailyDate) {
+    // Non-critical activity log (fire-and-forget)
+    if (canonicalIsDaily && canonicalDate) {
       logUserActivity(user.id, "daily_solved", {
-        date: dailyDate,
+        date: canonicalDate,
         elapsedSeconds: authoritativeElapsed,
         streak: transactionResult.updatedUser.currentStreak,
       }).catch(() => {});
@@ -271,4 +260,3 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Failed to process puzzle completion" }, { status: 500 });
   }
 }
-

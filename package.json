@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start -p 3007 -H 0.0.0.0",
     "lint": "next lint",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "prisma:generate": "prisma generate",

@@ -407,69 +407,9 @@ export async function PUT(req: Request, { params }: { params: Promise<{ puzzleKe
   }
 }
 
-/**
- * DELETE handler for session recovery / debugging:
- * Allows an authenticated user or admin to reset an uncompleted GameSession back to initial state.
- */
-export async function DELETE(req: Request, { params }: { params: Promise<{ puzzleKey: string }> }) {
-  try {
-    const sessionUser = await getSession(req);
-    if (!sessionUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+// DELETE endpoint intentionally removed.
+// Session reset is a security exploit vector (can erase mistakes/hints/startedAt).
+// Any restart feature must be implemented as a product-level operation
+// that preserves original competitive integrity flags.
 
-    const { puzzleKey } = await params;
-    if (!puzzleKey) {
-      return NextResponse.json({ error: "Missing puzzleKey" }, { status: 400 });
-    }
-
-    const puzzle = await getPuzzleByKey(puzzleKey);
-    if (!puzzle) {
-      return NextResponse.json({ error: "Puzzle not found" }, { status: 404 });
-    }
-
-    const existing = await prisma.gameSession.findUnique({
-      where: {
-        user_puzzle_session_unique: {
-          userId: sessionUser.id,
-          puzzleId: puzzle.id,
-        },
-      },
-    });
-
-    if (!existing) {
-      return NextResponse.json({ success: true, message: "No active session to reset" });
-    }
-
-    if (existing.completed) {
-      return NextResponse.json({ error: "Cannot reset a completed game session" }, { status: 400 });
-    }
-
-    // Reset uncompleted session by deleting the corrupted record so player can start cleanly
-    await prisma.gameSession.delete({
-      where: { id: existing.id },
-    });
-
-    return NextResponse.json({
-      success: true,
-      message: "Game session reset successfully",
-      progress: {
-        puzzleKey,
-        currentGrid: puzzle.initialGrid,
-        notes: {},
-        elapsedSeconds: 0,
-        mistakes: 0,
-        hintsUsed: 0,
-        isStarted: false,
-        completed: false,
-        completedAt: null,
-        version: 1,
-        xpAwarded: 0,
-      },
-    });
-  } catch (err) {
-    console.error("DELETE progress error:", err);
-    return NextResponse.json({ error: "Failed to reset session" }, { status: 500 });
-  }
-}
 

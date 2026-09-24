@@ -6,7 +6,6 @@ export interface PublicSudokuPuzzle {
   date?: string | null;
   difficulty: Difficulty;
   initialGrid: string; // 81 characters '0'-'9', '0' for empty
-  seed?: string;
   givensCount: number;
 }
 

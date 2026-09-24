@@ -11,7 +11,9 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { friendId } = await req.json();
+    const body = await req.json();
+    // Accept both canonical `friendId` and legacy `targetUserId` field names
+    const friendId = body.friendId || body.targetUserId;
     if (!friendId) {
       return NextResponse.json({ error: "Friend ID is required" }, { status: 400 });
     }
