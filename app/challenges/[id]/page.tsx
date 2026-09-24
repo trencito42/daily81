@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { SudokuBoard } from "@/components/game/SudokuBoard";
 import { CellState } from "@/lib/sudoku/types";
-import { parseGridString, stringifyGrid, isGridCompleteAndValid } from "@/lib/sudoku/validate";
+import { parseGridString, stringifyGrid, isGridCompleteAndValid, getRow, getCol } from "@/lib/sudoku/validate";
 import { DoodleButton } from "@/components/doodle/DoodleButton";
 import { DoodlePanel } from "@/components/doodle/DoodlePanel";
 import { DoodleBadge } from "@/components/doodle/DoodleBadge";
@@ -89,6 +89,30 @@ export default function ChallengeDetailPage({ params }: { params: Promise<{ id: 
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const startedRoundRef = useRef<number | null>(null);
+
+  const cellsRef = useRef<CellState[]>([]);
+  cellsRef.current = cells;
+
+  const selectedIndexRef = useRef<number | null>(null);
+  selectedIndexRef.current = selectedIndex;
+
+  const pencilModeRef = useRef<boolean>(false);
+  pencilModeRef.current = pencilMode;
+
+  const submittingRef = useRef<boolean>(false);
+  submittingRef.current = submitting;
+
+  const dataRef = useRef<ChallengeDetails | null>(null);
+  dataRef.current = data;
+
+  const currentRoundIndexRef = useRef<number>(0);
+  currentRoundIndexRef.current = currentRoundIndex;
+
+  const timeAttackRemainingRef = useRef<number>(0);
+  timeAttackRemainingRef.current = timeAttackRemaining;
+
+  const timeAttackSolvedCountRef = useRef<number>(0);
+  timeAttackSolvedCountRef.current = timeAttackSolvedCount;
 
   const fetchChallenge = useCallback(async () => {
     try {
@@ -182,7 +206,7 @@ export default function ChallengeDetailPage({ params }: { params: Promise<{ id: 
   }, [data, currentRoundIndex, challengeId]);
 
   const handleTimeAttackFinish = useCallback(async () => {
-    if (!data || submitting) return;
+    if (!dataRef.current || submittingRef.current) return;
     setSubmitting(true);
     try {
       await fetch(`/api/challenges/${challengeId}`, {
@@ -196,7 +220,7 @@ export default function ChallengeDetailPage({ params }: { params: Promise<{ id: 
     } finally {
       setSubmitting(false);
     }
-  }, [data, submitting, challengeId, fetchChallenge]);
+  }, [challengeId, fetchChallenge]);
 
   // Timer Tick
   useEffect(() => {
@@ -251,65 +275,11 @@ export default function ChallengeDetailPage({ params }: { params: Promise<{ id: 
     }
   };
 
-  const handleNumberInput = (num: number) => {
-    if (selectedIndex === null || cells.length !== 81 || submitting) return;
-    const cell = cells[selectedIndex];
-    if (cell.given) return;
-
-    if (pencilMode) {
-      const currentNotes = cell.notes || [];
-      const updatedNotes = currentNotes.includes(num)
-        ? currentNotes.filter((n) => n !== num)
-        : [...currentNotes, num].sort((a, b) => a - b);
-
-      setCells((prev) =>
-        prev.map((c, idx) => (idx === selectedIndex ? { ...c, notes: updatedNotes } : c))
-      );
-      return;
-    }
-
-    const prevVal = cell.value;
-    const newVal = prevVal === num ? 0 : num;
-
-    setHistory((prev) => [...prev, { index: selectedIndex, prevVal, newVal }]);
-
-    const nextCells = cells.map((c, idx) =>
-      idx === selectedIndex ? { ...c, value: newVal, notes: [] } : c
-    );
-    setCells(nextCells);
-
-    // Check completion
-    const gridStr = stringifyGrid(nextCells);
-    if (isGridCompleteAndValid(gridStr)) {
-      handleRoundCompleted(nextCells);
-    }
-  };
-
-  const handleErase = () => {
-    if (selectedIndex === null || cells.length !== 81 || submitting) return;
-    const cell = cells[selectedIndex];
-    if (cell.given || cell.value === 0) return;
-
-    setHistory((prev) => [...prev, { index: selectedIndex, prevVal: cell.value, newVal: 0 }]);
-    setCells((prev) =>
-      prev.map((c, idx) => (idx === selectedIndex ? { ...c, value: 0 } : c))
-    );
-  };
-
-  const handleUndo = () => {
-    if (history.length === 0 || submitting) return;
-    const last = history[history.length - 1];
-    setHistory((prev) => prev.slice(0, -1));
-    setCells((prev) =>
-      prev.map((c, idx) => (idx === last.index ? { ...c, value: last.prevVal } : c))
-    );
-  };
-
-  const handleRoundCompleted = async (solvedCells: CellState[]) => {
-    if (!data || submitting) return;
+  const handleRoundCompleted = useCallback(async (solvedCells: CellState[]) => {
+    if (!dataRef.current || submittingRef.current) return;
     setSubmitting(true);
-    const c = data.challenge;
-    const roundNumber = currentRoundIndex + 1;
+    const c = dataRef.current.challenge;
+    const roundNumber = currentRoundIndexRef.current + 1;
     const finalGrid = stringifyGrid(solvedCells);
 
     try {
@@ -320,18 +290,18 @@ export default function ChallengeDetailPage({ params }: { params: Promise<{ id: 
           action: "submit_attempt",
           roundNumber,
           finalGrid,
-          mistakes,
+          mistakes: 0,
           hintsUsed: 0,
         }),
       });
 
       if (res.ok) {
         if (c.mode === "time_attack") {
-          const nextSolved = timeAttackSolvedCount + 1;
+          const nextSolved = timeAttackSolvedCountRef.current + 1;
           setTimeAttackSolvedCount(nextSolved);
 
           const nextRound = c.rounds[roundNumber];
-          if (nextRound && timeAttackRemaining > 0) {
+          if (nextRound && timeAttackRemainingRef.current > 0) {
             setCurrentRoundIndex(roundNumber);
             setCells(parseGridString(nextRound.initialGrid));
             setSelectedIndex(null);
@@ -360,7 +330,138 @@ export default function ChallengeDetailPage({ params }: { params: Promise<{ id: 
     } finally {
       setSubmitting(false);
     }
-  };
+  }, [challengeId, fetchChallenge, handleTimeAttackFinish]);
+
+  const handleNumberInput = useCallback((num: number) => {
+    const selected = selectedIndexRef.current;
+    const currentCells = cellsRef.current;
+    if (selected === null || currentCells.length !== 81 || submittingRef.current) return;
+    const cell = currentCells[selected];
+    if (!cell || cell.given) return;
+
+    if (pencilModeRef.current) {
+      const currentNotes = cell.notes || [];
+      const updatedNotes = currentNotes.includes(num)
+        ? currentNotes.filter((n) => n !== num)
+        : [...currentNotes, num].sort((a, b) => a - b);
+
+      setCells((prev) =>
+        prev.map((c, idx) => (idx === selected ? { ...c, notes: updatedNotes } : c))
+      );
+      return;
+    }
+
+    const prevVal = cell.value;
+    const newVal = prevVal === num ? 0 : num;
+
+    setHistory((prev) => [...prev, { index: selected, prevVal, newVal }]);
+
+    const nextCells = currentCells.map((c, idx) =>
+      idx === selected ? { ...c, value: newVal, notes: [] } : c
+    );
+    setCells(nextCells);
+
+    // Check completion
+    const gridStr = stringifyGrid(nextCells);
+    if (!gridStr.includes("0") && isGridCompleteAndValid(gridStr)) {
+      handleRoundCompleted(nextCells);
+    }
+  }, [handleRoundCompleted]);
+
+  const handleErase = useCallback(() => {
+    const selected = selectedIndexRef.current;
+    const currentCells = cellsRef.current;
+    if (selected === null || currentCells.length !== 81 || submittingRef.current) return;
+    const cell = currentCells[selected];
+    if (!cell || cell.given || cell.value === 0) return;
+
+    setHistory((prev) => [...prev, { index: selected, prevVal: cell.value, newVal: 0 }]);
+    setCells((prev) =>
+      prev.map((c, idx) => (idx === selected ? { ...c, value: 0 } : c))
+    );
+  }, []);
+
+  const handleUndo = useCallback(() => {
+    if (submittingRef.current) return;
+    setHistory((prev) => {
+      if (prev.length === 0) return prev;
+      const last = prev[prev.length - 1];
+      setCells((currentCells) =>
+        currentCells.map((c, idx) => (idx === last.index ? { ...c, value: last.prevVal } : c))
+      );
+      return prev.slice(0, -1);
+    });
+  }, []);
+
+  // Keyboard navigation and shortcuts with e.repeat guard
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        document.activeElement &&
+        (document.activeElement.tagName === "INPUT" ||
+          document.activeElement.tagName === "TEXTAREA" ||
+          document.activeElement.tagName === "SELECT")
+      ) {
+        return;
+      }
+
+      if (!dataRef.current || dataRef.current.challenge.status !== "active") return;
+      if (e.repeat) return;
+
+      // Digits 1-9
+      if (e.key >= "1" && e.key <= "9") {
+        e.preventDefault();
+        handleNumberInput(parseInt(e.key, 10));
+        return;
+      }
+
+      // Erase (Backspace, Delete, 0)
+      if (e.key === "Backspace" || e.key === "Delete" || e.key === "0") {
+        e.preventDefault();
+        handleErase();
+        return;
+      }
+
+      // Pencil / Notes toggle (M or P)
+      if (e.key.toLowerCase() === "m" || e.key.toLowerCase() === "p") {
+        e.preventDefault();
+        setPencilMode((prev) => !prev);
+        return;
+      }
+
+      // Undo (Ctrl+Z or Cmd+Z)
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
+        e.preventDefault();
+        handleUndo();
+        return;
+      }
+
+      // Arrow Key Navigation
+      if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
+        e.preventDefault();
+        setSelectedIndex((curr) => {
+          if (curr === null) return 0;
+          const r = getRow(curr);
+          const c = getCol(curr);
+
+          if (e.key === "ArrowUp") return r > 0 ? (r - 1) * 9 + c : curr;
+          if (e.key === "ArrowDown") return r < 8 ? (r + 1) * 9 + c : curr;
+          if (e.key === "ArrowLeft") return c > 0 ? r * 9 + (c - 1) : curr;
+          if (e.key === "ArrowRight") return c < 8 ? r * 9 + (c + 1) : curr;
+          return curr;
+        });
+        return;
+      }
+
+      // Escape to deselect
+      if (e.key === "Escape") {
+        setSelectedIndex(null);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handleNumberInput, handleErase, handleUndo]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
